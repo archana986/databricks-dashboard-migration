@@ -1,3 +1,0 @@
-old_catalog,old_schema,old_table,new_catalog,new_schema,new_table
-demo_catalog,demo_schema,*,archana_krish_fe_dsa,vizient_deep_dive,*
-demo_catalog,demo_schema,category_insights_delta,archana_krish_fe_dsa,vizient_deep_dive,category_insights_delta

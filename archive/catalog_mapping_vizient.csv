@@ -1,3 +1,0 @@
-source_workspace,old_catalog,old_schema,old_table,target_workspace,new_catalog,new_schema,new_table,notes
-e2-field-eng,archana_krish_fe_dsa,vizient_deep_dive,*,sytable-classic-jddaet,vizient_migration_edl_demo,edl_vizient_deep_dive,*,Wildcard mapping - applies to all tables in vizient_deep_dive schema
-e2-field-eng,archana_krish_fe_dsa,vizient_deep_dive,category_insights_delta,sytable-classic-jddaet,vizient_migration_edl_demo,edl_vizient_deep_dive,category_insights_delta,Healthcare supply chain category insights table
