@@ -1,0 +1,116 @@
+# Databricks Dashboard Migration Configuration
+# Update with your actual values
+
+version: "1.0"
+
+# ============================================================================
+# SOURCE WORKSPACE (where dashboards currently exist)
+# ============================================================================
+source:
+  workspace_url: "https://e2-demo-field-eng.cloud.databricks.com"
+  
+  auth:
+    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    
+    # PAT Token (currently using)
+    pat:
+      secret_scope: "migration"
+      secret_key: "source-token"
+    
+    # OAuth (recommended - uncomment to use)
+    # method: "oauth"
+    # Note: OAuth uses notebook's built-in authentication
+    # No additional configuration needed when running in notebook
+
+# ============================================================================
+# TARGET WORKSPACE (where dashboards will be migrated)
+# ============================================================================
+target:
+  workspace_url: "https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com"
+  
+  auth:
+    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    
+    # PAT Token (currently using)
+    pat:
+      secret_scope: "migration"
+      secret_key: "target-token"
+    
+    # OAuth (recommended - uncomment to use)
+    # method: "oauth"
+    # Note: OAuth uses notebook's built-in authentication
+    # No additional configuration needed when running in notebook
+
+# ============================================================================
+# VOLUME PATHS (Unity Catalog Volumes - serverless compatible)
+# ============================================================================
+paths:
+  volume_base: "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
+  
+  # Subdirectories (relative to volume_base)
+  inventory: "dashboard_inventory"
+  exported: "exported"
+  transformed: "transformed"
+  bundles: "bundles"
+  mappings: "mappings"
+  logs: "logs"
+  
+  # CSV mapping file
+  mapping_csv: "mappings/catalog_schema_mapping.csv"
+  
+  # Target import location
+  target_parent_path: "/Shared/Migrated_Dashboards"
+
+# ============================================================================
+# DASHBOARD SELECTION
+# ============================================================================
+dashboard_selection:
+  method: "catalog_filter"
+  
+  inventory_csv:
+    enabled: false
+    csv_path: "dashboard_inventory/dashboard_inventory.csv"
+  
+  explicit_ids:
+    enabled: false
+    dashboard_ids: []
+  
+  folder_path:
+    enabled: false
+    path: "/Workspace/Shared/Dashboards"
+  
+  catalog_filter:
+    enabled: true
+    catalog: "archana_krish_fe_dsa"
+    use_system_tables: true
+
+# ============================================================================
+# TRANSFORMATION OPTIONS
+# ============================================================================
+transformation:
+  enabled: true
+  mapping_csv: "mappings/catalog_schema_mapping.csv"
+
+# ============================================================================
+# PERMISSIONS OPTIONS
+# ============================================================================
+permissions:
+  capture: true
+  apply_after_import: true
+  match_by: "name"
+  dry_run: true
+
+# ============================================================================
+# WAREHOUSE CONFIGURATION (for target workspace)
+# ============================================================================
+warehouse:
+  use_name_lookup: true
+  warehouse_name: "Main Warehouse"
+
+# ============================================================================
+# BUNDLE OPTIONS (if using bundle deployment)
+# ============================================================================
+bundle:
+  name: "dashboard_migration"
+  embed_credentials: true
+  mode: "production"

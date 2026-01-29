@@ -1,0 +1,7 @@
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+dev_catalog,bronze_layer,customers,prod_catalog,gold_layer,customers,dev_files,prod_files
+dev_catalog,bronze_layer,orders,prod_catalog,gold_layer,orders,dev_files,prod_files
+dev_catalog,bronze_layer,products,prod_catalog,gold_layer,products,dev_files,prod_files
+staging_cat,raw_data,events,prod_catalog,curated_data,events,staging_files,prod_files
+staging_cat,raw_data,clicks,prod_catalog,analytics,clicks,staging_files,analytics_files
+test_catalog,sandbox,transactions,prod_catalog,finance,transactions,test_vol,prod_vol

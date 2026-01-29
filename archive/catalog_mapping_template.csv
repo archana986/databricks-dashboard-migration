@@ -1,0 +1,4 @@
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,notes
+demo_catalog,demo_schema,*,prod_catalog,prod_schema,*,Wildcard mapping - applies to all tables in schema
+source_catalog,source_schema,sales_data,target_catalog,target_schema,sales_data,Exact table mapping
+source_catalog,source_schema,customer_info,target_catalog,target_schema,customer_master,Table renamed during migration

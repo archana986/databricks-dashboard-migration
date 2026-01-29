@@ -1,0 +1,146 @@
+# Databricks Dashboard Migration Configuration
+# Copy this file to config.yaml and update with your actual values
+
+version: "1.0"
+
+# ============================================================================
+# SOURCE WORKSPACE (where dashboards currently exist)
+# ============================================================================
+source:
+  workspace_url: "https://your-source-workspace.cloud.databricks.com"
+  
+  # Authentication (choose one method)
+  auth:
+    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    
+    # PAT Token authentication (you are using this)
+    pat:
+      secret_scope: "migration"
+      secret_key: "source-token"
+    
+    # OAuth authentication (RECOMMENDED by Databricks - uncomment to use)
+    # method: "oauth"
+    # Note: OAuth uses notebook's built-in authentication automatically
+    # No secrets or additional config needed
+    # Benefits: No token expiration, better security, auto-renewal
+    # To use: Just set method: "oauth" and remove/comment pat section
+    
+    # Service Principal authentication (for automation/CI-CD)
+    # method: "service_principal"
+    # service_principal:
+    #   client_id_scope: "migration"
+    #   client_id_key: "source-sp-client-id"
+    #   client_secret_scope: "migration"
+    #   client_secret_key: "source-sp-secret"
+    #   tenant_id_scope: "migration"
+    #   tenant_id_key: "source-sp-tenant"
+
+# ============================================================================
+# TARGET WORKSPACE (where dashboards will be migrated)
+# ============================================================================
+target:
+  workspace_url: "https://your-target-workspace.cloud.databricks.com"
+  
+  auth:
+    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    
+    # PAT Token authentication (you are using this)
+    pat:
+      secret_scope: "migration"
+      secret_key: "target-token"
+    
+    # OAuth authentication (RECOMMENDED by Databricks - uncomment to use)
+    # method: "oauth"
+    # Note: OAuth uses notebook's built-in authentication automatically
+    # No secrets or additional config needed
+
+# ============================================================================
+# VOLUME PATHS (Unity Catalog Volumes - serverless compatible)
+# ============================================================================
+paths:
+  volume_base: "/Volumes/catalog/schema/dashboard_migration"
+  
+  # Subdirectories (relative to volume_base)
+  inventory: "dashboard_inventory"
+  exported: "exported"
+  transformed: "transformed"
+  bundles: "bundles"
+  mappings: "mappings"
+  logs: "logs"
+  
+  # CSV mapping file
+  mapping_csv: "mappings/catalog_schema_mapping.csv"
+  
+  # Target import location
+  target_parent_path: "/Shared/Migrated_Dashboards"
+
+# ============================================================================
+# DASHBOARD SELECTION
+# ============================================================================
+dashboard_selection:
+  # Method: "inventory_csv", "explicit_ids", "folder_path", "catalog_filter"
+  method: "catalog_filter"
+  
+  # Configuration per method
+  inventory_csv:
+    enabled: false
+    csv_path: "dashboard_inventory/dashboard_inventory.csv"
+  
+  explicit_ids:
+    enabled: false
+    dashboard_ids:
+      - "dashboard_id_1"
+      - "dashboard_id_2"
+  
+  folder_path:
+    enabled: false
+    path: "/Workspace/Shared/Dashboards"
+  
+  catalog_filter:
+    enabled: true
+    catalog: "your_catalog_name"
+    use_system_tables: true  # Faster discovery
+
+# ============================================================================
+# TRANSFORMATION OPTIONS
+# ============================================================================
+transformation:
+  # Apply catalog/schema/table transformations
+  enabled: true
+  
+  # CSV mapping file (relative to volume_base)
+  mapping_csv: "mappings/catalog_schema_mapping.csv"
+
+# ============================================================================
+# PERMISSIONS OPTIONS
+# ============================================================================
+permissions:
+  # Capture permissions during export
+  capture: true
+  
+  # Apply permissions after import
+  apply_after_import: true
+  
+  # Match method for applying permissions: "name", "id", "both"
+  match_by: "name"
+  
+  # Dry run mode (test without applying)
+  dry_run: true
+
+# ============================================================================
+# WAREHOUSE CONFIGURATION (for target workspace)
+# ============================================================================
+warehouse:
+  # Use warehouse name lookup (recommended) or direct ID
+  use_name_lookup: true
+  
+  warehouse_name: "Main Warehouse"
+  # warehouse_id: "abc123def456"  # Alternative: use direct ID
+
+# ============================================================================
+# BUNDLE OPTIONS (if using bundle deployment)
+# ============================================================================
+bundle:
+  name: "dashboard_migration"
+  embed_credentials: true
+  mode: "production"  # Options: "development", "production"

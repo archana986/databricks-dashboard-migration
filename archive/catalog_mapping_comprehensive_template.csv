@@ -1,0 +1,6 @@
+source_workspace,old_catalog,old_schema,old_table,target_workspace,new_catalog,new_schema,new_table,migration_type,notes
+e2-field-eng,archana_krish_fe_dsa,vizient_deep_dive,*,sytable-classic-jddaet,vizient_migration_edl_demo,edl_vizient_deep_dive,*,wildcard,Map entire schema - all tables
+e2-field-eng,archana_krish_fe_dsa,vizient_deep_dive,category_insights_delta,sytable-classic-jddaet,vizient_migration_edl_demo,edl_vizient_deep_dive,category_insights_delta,exact,Healthcare supply chain insights
+e2-field-eng,demo_catalog,demo_schema,sales_data,sytable-classic-jddaet,prod_catalog,prod_schema,sales_data,exact,Sales transaction data
+e2-field-eng,demo_catalog,demo_schema,customer_info,sytable-classic-jddaet,prod_catalog,prod_schema,customer_master,renamed,Customer table renamed to customer_master
+e2-field-eng,staging_catalog,staging_schema,*,sytable-classic-jddaet,production_catalog,prod_schema,*,wildcard,Staging to Production migration
