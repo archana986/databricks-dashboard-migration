@@ -6,6 +6,13 @@ from databricks.sdk import WorkspaceClient
 from typing import Dict, List
 import json
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def get_dashboard_permissions(client: WorkspaceClient, dashboard_id: str) -> Dict:
     """
     Get dashboard permissions from source workspace.

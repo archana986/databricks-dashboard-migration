@@ -8,6 +8,13 @@ from typing import List, Dict
 import pandas as pd
 import io
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def load_mapping_csv(csv_path: str) -> List[Dict]:
     """Load catalog/schema/table mappings from CSV."""
     content = dbutils.fs.head(csv_path, 10485760)

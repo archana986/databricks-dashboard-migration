@@ -6,6 +6,13 @@ from typing import List, Dict
 from pathlib import Path
 import fnmatch
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def read_volume_file(file_path: str) -> str:
     """
     Read file content from UC Volume.

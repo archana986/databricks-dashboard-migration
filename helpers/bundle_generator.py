@@ -7,6 +7,13 @@ import yaml
 from typing import Dict, List, Any
 from pathlib import Path
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def create_databricks_yml(
     bundle_name: str,
     target_workspace_url: str,

@@ -6,6 +6,13 @@ from databricks.sdk import WorkspaceClient
 from typing import Optional
 from .config_loader import get_config
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def create_workspace_client(
     workspace: str = 'source',
     custom_config: Optional[dict] = None

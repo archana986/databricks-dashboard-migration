@@ -7,6 +7,13 @@ from databricks.sdk.service.dashboards import DashboardView
 from typing import List, Dict, Optional
 from .config_loader import get_dashboard_selection
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 def discover_dashboards(
     client: WorkspaceClient,
     method: Optional[str] = None,

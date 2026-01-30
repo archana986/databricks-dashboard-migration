@@ -6,6 +6,13 @@ import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
 
+# Initialize dbutils for module scope (Databricks-specific)
+try:
+    dbutils
+except NameError:
+    import IPython
+    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+
 _config_cache: Optional[Dict[str, Any]] = None
 
 def load_config(config_path: str = None) -> Dict[str, Any]:
