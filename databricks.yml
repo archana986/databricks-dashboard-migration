@@ -204,18 +204,21 @@ resources:
           # - Auto-scaling based on workload
           # - No cluster management needed
           # - Ideal for SDK operations (export, transform, permissions)
+          # NOTE: Libraries are installed in the notebook via %pip install
           
           # ALTERNATIVE: Standard cluster (Uncomment if needed)
           # Uncomment the job_cluster_key line below and the job_clusters section at bottom of this job
           # job_cluster_key: export_cluster
           
-          libraries:
-            - pypi:
-                package: "databricks-sdk>=0.18.0"
-            - pypi:
-                package: "pyyaml>=6.0"
+          # Libraries (only used with standard clusters, not serverless)
+          # libraries:
+          #   - pypi:
+          #       package: "databricks-sdk>=0.18.0"
+          #   - pypi:
+          #       package: "pyyaml>=6.0"
       
       # ALTERNATIVE: Standard cluster configuration (Uncomment if serverless not suitable)
+      # NOTE: Also uncomment the libraries section above when using standard cluster
       # job_clusters:
       #   - job_cluster_key: export_cluster
       #     new_cluster:
@@ -261,18 +264,21 @@ resources:
           # - Auto-scaling based on workload
           # - No cluster management needed
           # - Ideal for bundle generation and deployment operations
+          # NOTE: Libraries are installed in the notebook via %pip install
           
           # ALTERNATIVE: Standard cluster (Uncomment if needed)
           # Uncomment the job_cluster_key line below and the job_clusters section at bottom of this job
           # job_cluster_key: deploy_cluster
           
-          libraries:
-            - pypi:
-                package: "databricks-sdk>=0.18.0"
-            - pypi:
-                package: "pyyaml>=6.0"
+          # Libraries (only used with standard clusters, not serverless)
+          # libraries:
+          #   - pypi:
+          #       package: "databricks-sdk>=0.18.0"
+          #   - pypi:
+          #       package: "pyyaml>=6.0"
       
       # ALTERNATIVE: Standard cluster configuration (Uncomment if serverless not suitable)
+      # NOTE: Also uncomment the libraries section above when using standard cluster
       # job_clusters:
       #   - job_cluster_key: deploy_cluster
       #     new_cluster:
