@@ -8,6 +8,11 @@
 bundle:
   name: dashboard_migration
 
+# Sync workspace files (helpers directory needed by notebooks)
+sync:
+  paths:
+    - helpers
+
 variables:
   catalog:
     description: Source catalog to scan for dashboards
