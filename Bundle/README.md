@@ -56,6 +56,59 @@ databricks bundle deploy -t dev
 
 ---
 
+## Cluster Configuration
+
+The bundle uses **different cluster configurations** optimized for each job:
+
+### Job 1: Inventory Generation (Serverless)
+
+**Default: TRUE Serverless Compute** ⚡
+```yaml
+spark_version: "17.3.x-scala2.12"  # 17.3 LTS (Apache Spark 3.5.4)
+num_workers: 0  # Serverless (auto-scaling)
+data_security_mode: SINGLE_USER
+```
+
+**Benefits:**
+- ⚡ Faster startup (no cluster provisioning)
+- 📊 Auto-scales for SQL workloads
+- 💰 Cost-effective (pay only for compute used)
+- 🚀 Ideal for system table queries
+
+**Alternative: 17.3 LTS with Photon** (if serverless unavailable)
+```yaml
+spark_version: "17.3.x-scala2.12"
+node_type_id: "i3.xlarge"
+num_workers: 2
+runtime_engine: PHOTON
+data_security_mode: USER_ISOLATION
+```
+
+### Jobs 2 & 3: Export/Transform and Deploy (Standard Clusters)
+
+**Configuration:**
+```yaml
+spark_version: "17.3.x-scala2.12"  # 17.3 LTS (Apache Spark 3.5.4)
+node_type_id: "i3.xlarge"
+num_workers: 1
+data_security_mode: USER_ISOLATION
+```
+
+**Why not serverless:**
+- Need SDK libraries (databricks-sdk, pyyaml)
+- Require persistent workspace connections
+- Standard clusters more reliable for API calls
+
+### Important Notes
+
+- ✅ **Always use 17.3 LTS** (or latest LTS) going forward
+- ❌ **Never use 14.3.x** - outdated, lacks latest features
+- 🔧 Serverless requires `num_workers: 0`
+- 📦 Standard clusters need explicit `num_workers` (1+)
+- 🎯 All configs in `databricks.yml` lines 48-142
+
+---
+
 ## Workflow
 
 ### Step 1: Generate Inventory
@@ -80,10 +133,12 @@ databricks bundle run inventory_generation -t dev
 
 **Output:** Complete dashboard inventory with metadata
 
+**Cluster:** Serverless compute (17.3 LTS, auto-scaling)
+
 **Performance:**
-- Uses Photon-enabled or Serverless cluster
 - Optimized SQL JOINs (2 queries total vs 400+ in old approach)
 - Typical time: 1-3 minutes for 200+ dashboards
+- ~20-30 seconds for 50 dashboards
 
 ---
 
@@ -170,15 +225,16 @@ resources:
   jobs:
     inventory_generation:      # Step 1
       - Bundle_00 notebook
-      - Serverless/Photon cluster
+      - Serverless compute (17.3 LTS, auto-scaling)
+      - Alternative: 17.3 LTS + Photon
       
     export_transform:          # Step 2
       - Bundle_01 notebook
-      - Standard cluster + SDK
+      - Standard cluster (17.3 LTS) + SDK
       
     generate_deploy:           # Step 3
       - Bundle_02 notebook
-      - Standard cluster + CLI
+      - Standard cluster (17.3 LTS) + CLI
 ```
 
 ### Benefits of 3-Step Approach
@@ -383,9 +439,11 @@ SELECT current_metastore(), get_workspace_id()
 **Problem:** Slow performance
 
 **Solutions:**
-- Use Photon-enabled cluster
+- Ensure using serverless compute (default in databricks.yml)
+- If using standard cluster, enable Photon and use 17.3 LTS
 - Check cluster has Unity Catalog access
 - Reduce audit_lookback_days (90 → 30)
+- Verify using 17.3 LTS, not older versions (14.3.x)
 
 ---
 

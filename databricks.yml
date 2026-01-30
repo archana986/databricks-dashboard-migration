@@ -39,20 +39,27 @@ resources:
               volume_base: ${var.volume_base}
               audit_lookback_days: ${var.audit_lookback_days}
           
-          # Serverless compute (recommended for SQL queries)
-          # Faster startup, auto-scaling, no cluster management
-          job_cluster_key: serverless_cluster
-      
-      job_clusters:
-        - job_cluster_key: serverless_cluster
+          # TRUE SERVERLESS COMPUTE (Recommended)
+          # - Faster startup (no cluster provisioning)
+          # - Auto-scaling based on workload
+          # - No cluster management needed
+          # - Ideal for SQL-heavy workloads (system table queries)
           new_cluster:
-            spark_version: "14.3.x-scala2.12"
-            node_type_id: "i3.xlarge"
-            num_workers: 2
-            runtime_engine: PHOTON
-            data_security_mode: USER_ISOLATION
-            spark_conf:
-              spark.databricks.delta.preview.enabled: "true"
+            spark_version: "17.3.x-scala2.12"  # Latest LTS (includes Apache Spark 3.5.4)
+            num_workers: 0  # 0 = Serverless (auto-scaling)
+            data_security_mode: SINGLE_USER
+            custom_tags:
+              ResourceClass: "Serverless"
+          
+          # ALTERNATIVE: 17.3 LTS with Photon (Uncomment if serverless not available)
+          # new_cluster:
+          #   spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
+          #   node_type_id: "i3.xlarge"
+          #   num_workers: 2
+          #   runtime_engine: PHOTON
+          #   data_security_mode: USER_ISOLATION
+          #   spark_conf:
+          #     spark.databricks.delta.preview.enabled: "true"
       
       # Optional: Schedule to refresh inventory weekly
       # schedule:
@@ -85,7 +92,7 @@ resources:
       job_clusters:
         - job_cluster_key: standard_cluster
           new_cluster:
-            spark_version: "14.3.x-scala2.12"
+            spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
             node_type_id: "i3.xlarge"
             num_workers: 1
             data_security_mode: USER_ISOLATION
@@ -117,7 +124,7 @@ resources:
       job_clusters:
         - job_cluster_key: deployment_cluster
           new_cluster:
-            spark_version: "14.3.x-scala2.12"
+            spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
             node_type_id: "i3.xlarge"
             num_workers: 1
             data_security_mode: USER_ISOLATION
