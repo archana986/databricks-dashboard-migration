@@ -141,7 +141,7 @@ targets:
     
     variables:
       catalog: archana_krish_fe_dsa
-      volume_base: /Volumes/main/migration/dashboard_migration_dev
+      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
   
   prod:
     mode: production
@@ -150,7 +150,7 @@ targets:
     
     variables:
       catalog: production_catalog
-      volume_base: /Volumes/main/migration/dashboard_migration_prod
+      volume_base: /Volumes/production_catalog/migration/dashboard_migration
     
     # Production safeguards
     permissions:
