@@ -14,6 +14,79 @@ except NameError:
     import IPython
     dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
+def _get_workspace_id(client: WorkspaceClient) -> int:
+    """
+    Extract workspace ID from client host URL or notebook context.
+    
+    Args:
+        client: Workspace client
+    
+    Returns:
+        Workspace ID as integer
+    """
+    import re
+    
+    # Method 1: Extract from host URL (e.g., https://xxx-12345678-abc.cloud.databricks.com)
+    host = client.config.host
+    match = re.search(r'-(\d+)-', host)
+    if match:
+        return int(match.group(1))
+    
+    # Method 2: Try to get from notebook context
+    try:
+        workspace_id = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().get("orgId").get()
+        return int(workspace_id)
+    except:
+        pass
+    
+    # Method 3: Last resort - parse from different URL format
+    match = re.search(r'//([a-z0-9-]+)\.cloud\.databricks\.com', host)
+    if match:
+        # Some workspaces have ID embedded differently
+        parts = match.group(1).split('-')
+        for part in parts:
+            if part.isdigit() and len(part) >= 8:
+                return int(part)
+    
+    raise ValueError(f"Could not determine workspace_id from host: {host}")
+
+def _execute_query(client: WorkspaceClient, query: str) -> List[List]:
+    """
+    Execute SQL query using spark.sql if available (faster), otherwise SDK.
+    
+    Args:
+        client: Workspace client
+        query: SQL query string
+    
+    Returns:
+        List of rows (each row is a list of values)
+    """
+    # Try spark first (faster in Databricks notebooks)
+    try:
+        from pyspark.sql import SparkSession
+        spark = SparkSession.getActiveSession()
+        if spark:
+            result = spark.sql(query).collect()
+            # Convert rows to list of lists
+            return [[getattr(row, field) for field in row.__fields__] for row in result]
+    except Exception:
+        pass
+    
+    # Fall back to SDK statement execution
+    warehouses = list(client.warehouses.list())
+    if not warehouses:
+        raise Exception("No warehouses available")
+    
+    statement = client.statement_execution.execute_statement(
+        warehouse_id=warehouses[0].id,
+        statement=query,
+        wait_timeout="30s"
+    )
+    
+    if statement.result and statement.result.data_array:
+        return statement.result.data_array
+    return []
+
 def discover_dashboards(
     client: WorkspaceClient,
     method: Optional[str] = None,
@@ -64,32 +137,26 @@ def _discover_by_catalog(
         return _discover_via_sdk_list(client, catalog)
 
 def _discover_via_system_tables(client: WorkspaceClient, catalog: str) -> List[Dict]:
-    """Fast discovery using system.access.table_lineage."""
-    query = f"""
-    SELECT DISTINCT entity_id
-    FROM system.access.table_lineage
-    WHERE source_table_catalog = '{catalog}'
-      AND entity_type = 'DASHBOARD'
-      AND entity_id IS NOT NULL
-    """
-    
+    """Fast discovery using system.access.table_lineage with workspace filtering."""
     try:
-        warehouses = list(client.warehouses.list())
-        if not warehouses:
-            raise Exception("No warehouses available")
+        # Get workspace ID for accurate filtering
+        workspace_id = _get_workspace_id(client)
         
-        warehouse_id = warehouses[0].id
+        query = f"""
+        SELECT DISTINCT entity_id
+        FROM system.access.table_lineage
+        WHERE workspace_id = {workspace_id}
+          AND source_table_catalog = '{catalog}'
+          AND entity_type = 'DASHBOARD_V3'
+          AND entity_id IS NOT NULL
+        """
         
-        statement = client.statement_execution.execute_statement(
-            warehouse_id=warehouse_id,
-            statement=query,
-            wait_timeout="30s"
-        )
+        # Execute query using optimized method (spark.sql if available)
+        result_rows = _execute_query(client, query)
         
         dashboard_ids = set()
-        if statement.result and statement.result.data_array:
-            for row in statement.result.data_array:
-                dashboard_ids.add(row[0])
+        for row in result_rows:
+            dashboard_ids.add(row[0])
         
         # Get full dashboard objects
         dashboards = []
@@ -221,26 +288,16 @@ def _get_last_accessed_dates(client: WorkspaceClient, dashboard_ids: List[str]) 
     """
     
     try:
-        warehouses = list(client.warehouses.list())
-        if not warehouses:
-            return {}
-        
-        warehouse_id = warehouses[0].id
-        
-        statement = client.statement_execution.execute_statement(
-            warehouse_id=warehouse_id,
-            statement=query,
-            wait_timeout="30s"
-        )
+        # Use optimized query execution (spark.sql if available)
+        result_rows = _execute_query(client, query)
         
         last_accessed_map = {}
-        if statement.result and statement.result.data_array:
-            for row in statement.result.data_array:
-                dash_id = row[0]
-                last_accessed = row[1]
-                if dash_id and last_accessed:
-                    # Convert timestamp to readable date
-                    last_accessed_map[dash_id] = str(last_accessed).split('T')[0]  # Just date part
+        for row in result_rows:
+            dash_id = row[0]
+            last_accessed = row[1]
+            if dash_id and last_accessed:
+                # Convert timestamp to readable date
+                last_accessed_map[dash_id] = str(last_accessed).split('T')[0]  # Just date part
         
         return last_accessed_map
         
@@ -342,6 +399,29 @@ def generate_inventory(
                 
                 # Add last accessed date if available
                 enriched_dash['last_accessed'] = last_accessed_map.get(dashboard_id, 'Never')
+                
+                # Add lineage statistics (catalog and table counts)
+                try:
+                    workspace_id = _get_workspace_id(client)
+                    lineage_query = f"""
+                        SELECT 
+                            COUNT(DISTINCT source_table_catalog) as catalog_count,
+                            COUNT(DISTINCT source_table_name) as table_count
+                        FROM system.access.table_lineage
+                        WHERE workspace_id = {workspace_id}
+                            AND entity_id = '{dashboard_id}'
+                            AND entity_type = 'DASHBOARD_V3'
+                    """
+                    lineage_result = _execute_query(client, lineage_query)
+                    if lineage_result and len(lineage_result) > 0:
+                        enriched_dash['catalog_count'] = lineage_result[0][0] if lineage_result[0][0] is not None else 0
+                        enriched_dash['table_count'] = lineage_result[0][1] if lineage_result[0][1] is not None else 0
+                    else:
+                        enriched_dash['catalog_count'] = 0
+                        enriched_dash['table_count'] = 0
+                except Exception:
+                    enriched_dash['catalog_count'] = 0
+                    enriched_dash['table_count'] = 0
                 
                 # Add workspace link
                 enriched_dash['link'] = f"/sql/dashboards/{dashboard_id}"
