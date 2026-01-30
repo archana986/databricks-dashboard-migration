@@ -193,6 +193,61 @@ def _discover_by_ids(client: WorkspaceClient, dashboard_ids: Optional[List[str]]
     
     return dashboards
 
+def _get_last_accessed_dates(client: WorkspaceClient, dashboard_ids: List[str]) -> Dict[str, str]:
+    """
+    Get last accessed dates for dashboards from audit logs.
+    
+    Args:
+        client: Workspace client
+        dashboard_ids: List of dashboard IDs to query
+    
+    Returns:
+        Map of dashboard_id -> last_accessed_date string
+    """
+    if not dashboard_ids:
+        return {}
+    
+    # Build query for audit logs (last 90 days for performance)
+    ids_list = "', '".join(dashboard_ids[:100])  # Limit to first 100 for performance
+    query = f"""
+    SELECT 
+        request_params.dashboard_id as dashboard_id,
+        MAX(event_time) as last_accessed
+    FROM system.access.audit
+    WHERE action_name IN ('getDashboard', 'getPublishedDashboard', 'getDashboardSubscription')
+      AND request_params.dashboard_id IN ('{ids_list}')
+      AND event_date >= CURRENT_DATE() - INTERVAL 90 DAYS
+    GROUP BY request_params.dashboard_id
+    """
+    
+    try:
+        warehouses = list(client.warehouses.list())
+        if not warehouses:
+            return {}
+        
+        warehouse_id = warehouses[0].id
+        
+        statement = client.statement_execution.execute_statement(
+            warehouse_id=warehouse_id,
+            statement=query,
+            wait_timeout="30s"
+        )
+        
+        last_accessed_map = {}
+        if statement.result and statement.result.data_array:
+            for row in statement.result.data_array:
+                dash_id = row[0]
+                last_accessed = row[1]
+                if dash_id and last_accessed:
+                    # Convert timestamp to readable date
+                    last_accessed_map[dash_id] = str(last_accessed).split('T')[0]  # Just date part
+        
+        return last_accessed_map
+        
+    except Exception as e:
+        print(f"Could not fetch last accessed dates: {e}")
+        return {}
+
 def _discover_from_inventory(csv_path: Optional[str] = None) -> List[Dict]:
     """Load dashboards from inventory CSV."""
     import pandas as pd
@@ -219,7 +274,7 @@ def generate_inventory(
     Args:
         client: Workspace client
         include_published_status: Include whether dashboard is published
-        include_metadata: Include additional metadata (owner, tables, etc.)
+        include_metadata: Include additional metadata (owner, tables, last accessed, etc.)
     
     Returns:
         List of dashboard dictionaries with comprehensive metadata
@@ -231,6 +286,14 @@ def generate_inventory(
     
     # Discover dashboards using configured method
     dashboards = discover_dashboards(client, method=method)
+    
+    # Get last accessed dates from audit logs if metadata requested
+    last_accessed_map = {}
+    if include_metadata:
+        try:
+            last_accessed_map = _get_last_accessed_dates(client, [d['id'] for d in dashboards])
+        except Exception as e:
+            print(f"Warning: Could not fetch last accessed dates: {e}")
     
     # Enrich with additional metadata
     enriched = []
@@ -251,18 +314,36 @@ def generate_inventory(
             # Add published status if requested
             if include_published_status:
                 published = False
+                published_version = None
                 try:
-                    client.lakeview.get_published(dashboard_id)
+                    pub = client.lakeview.get_published(dashboard_id)
                     published = True
+                    published_version = pub.version if hasattr(pub, 'version') else None
                 except:
                     pass
                 enriched_dash['published'] = 'Yes' if published else 'No'
+                if published_version:
+                    enriched_dash['published_version'] = published_version
             
-            # Add metadata if requested
+            # Add comprehensive metadata if requested
             if include_metadata:
                 enriched_dash['warehouse_id'] = full.warehouse_id or 'None'
                 enriched_dash['created_time'] = str(full.create_time) if full.create_time else 'Unknown'
                 enriched_dash['updated_time'] = str(full.update_time) if full.update_time else 'Unknown'
+                enriched_dash['lifecycle_state'] = full.lifecycle_state.value if hasattr(full, 'lifecycle_state') and full.lifecycle_state else 'ACTIVE'
+                enriched_dash['etag'] = full.etag if hasattr(full, 'etag') and full.etag else 'None'
+                
+                # Extract parent folder from path
+                if full.path:
+                    parent_path = '/'.join(full.path.rsplit('/', 1)[:-1]) if '/' in full.path else '/'
+                    enriched_dash['parent_folder'] = parent_path
+                else:
+                    enriched_dash['parent_folder'] = 'Unknown'
+                
+                # Add last accessed date if available
+                enriched_dash['last_accessed'] = last_accessed_map.get(dashboard_id, 'Never')
+                
+                # Add workspace link
                 enriched_dash['link'] = f"/sql/dashboards/{dashboard_id}"
             
             enriched.append(enriched_dash)
