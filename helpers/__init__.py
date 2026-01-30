@@ -9,7 +9,7 @@ __version__ = "1.0.0"
 # Import commonly used functions for convenience
 from .config_loader import load_config, get_config, get_path
 from .auth import create_workspace_client
-from .discovery import discover_dashboards
+from .discovery import discover_dashboards, generate_inventory, save_inventory_to_csv, load_inventory_from_csv
 from .export import export_dashboard
 from .transform import transform_dashboard_json, load_mapping_csv
 from .permissions import get_dashboard_permissions, apply_dashboard_permissions, load_permissions_from_volume
@@ -27,6 +27,9 @@ __all__ = [
     'get_path',
     'create_workspace_client',
     'discover_dashboards',
+    'generate_inventory',
+    'save_inventory_to_csv',
+    'load_inventory_from_csv',
     'export_dashboard',
     'transform_dashboard_json',
     'load_mapping_csv',

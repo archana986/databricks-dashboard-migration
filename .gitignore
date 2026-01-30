@@ -35,3 +35,7 @@ exported/
 _archive/
 archive/
 _local_archive/
+
+# Local personal files (not for GitHub)
+GIT_PUSH_GUIDE.md
+GIT_WORKFLOW.md

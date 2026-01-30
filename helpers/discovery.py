@@ -199,3 +199,115 @@ def _discover_from_inventory(csv_path: Optional[str] = None) -> List[Dict]:
     df = pd.read_csv(io.StringIO(content))
     
     return df.to_dict('records')
+
+def generate_inventory(
+    client: WorkspaceClient,
+    include_published_status: bool = True,
+    include_metadata: bool = True
+) -> List[Dict]:
+    """
+    Generate comprehensive inventory with metadata.
+    
+    Args:
+        client: Workspace client
+        include_published_status: Include whether dashboard is published
+        include_metadata: Include additional metadata (owner, tables, etc.)
+    
+    Returns:
+        List of dashboard dictionaries with comprehensive metadata
+    """
+    from .config_loader import get_dashboard_selection
+    
+    config = get_dashboard_selection()
+    method = config.get('method', 'catalog_filter')
+    
+    # Discover dashboards using configured method
+    dashboards = discover_dashboards(client, method=method)
+    
+    # Enrich with additional metadata
+    enriched = []
+    
+    for dash in dashboards:
+        dashboard_id = dash['id']
+        
+        try:
+            # Get full details
+            full = client.lakeview.get(dashboard_id)
+            
+            enriched_dash = {
+                'dashboard_id': dashboard_id,
+                'dashboard_name': full.display_name,
+                'path': full.path,
+            }
+            
+            # Add published status if requested
+            if include_published_status:
+                published = False
+                try:
+                    client.lakeview.get_published(dashboard_id)
+                    published = True
+                except:
+                    pass
+                enriched_dash['published'] = 'Yes' if published else 'No'
+            
+            # Add metadata if requested
+            if include_metadata:
+                enriched_dash['warehouse_id'] = full.warehouse_id or 'None'
+                enriched_dash['created_time'] = str(full.create_time) if full.create_time else 'Unknown'
+                enriched_dash['updated_time'] = str(full.update_time) if full.update_time else 'Unknown'
+                enriched_dash['link'] = f"/sql/dashboards/{dashboard_id}"
+            
+            enriched.append(enriched_dash)
+            
+        except Exception as e:
+            print(f"Warning: Could not enrich {dashboard_id}: {e}")
+            enriched.append(dash)
+    
+    return enriched
+
+def save_inventory_to_csv(dashboards: List[Dict], csv_path: str) -> None:
+    """
+    Save dashboard inventory to CSV in volume.
+    
+    Args:
+        dashboards: List of dashboard dictionaries
+        csv_path: Full volume path to save CSV (e.g., /Volumes/.../inventory.csv)
+    """
+    import pandas as pd
+    from .volume_utils import write_volume_file, ensure_directory_exists
+    
+    # Ensure parent directory exists
+    parent_dir = "/".join(csv_path.rsplit("/", 1)[:-1])
+    ensure_directory_exists(parent_dir)
+    
+    # Convert to DataFrame and CSV
+    df = pd.DataFrame(dashboards)
+    csv_content = df.to_csv(index=False)
+    
+    # Save to volume
+    write_volume_file(csv_path, csv_content)
+    
+    print(f"✅ Saved inventory to: {csv_path}")
+    print(f"   Total dashboards: {len(dashboards)}")
+
+def load_inventory_from_csv(csv_path: str) -> List[Dict]:
+    """
+    Load validated inventory from CSV in volume.
+    
+    Args:
+        csv_path: Full volume path to CSV
+    
+    Returns:
+        List of dashboard dictionaries from CSV
+    """
+    import pandas as pd
+    import io
+    from .volume_utils import read_volume_file
+    
+    content = read_volume_file(csv_path)
+    df = pd.read_csv(io.StringIO(content))
+    
+    print(f"✅ Loaded inventory from: {csv_path}")
+    print(f"   Total dashboards: {len(df)}")
+    
+    return df.to_dict('records')
