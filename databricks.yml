@@ -197,23 +197,19 @@ resources:
               mapping_csv_path: ${var.mapping_csv_path}
               capture_permissions: ${var.capture_permissions}
           
-          job_cluster_key: standard_cluster
+          # SERVERLESS COMPUTE
+          # No cluster definition - uses Databricks serverless by default
+          # Benefits:
+          # - Faster startup (no cluster provisioning)
+          # - Auto-scaling based on workload
+          # - No cluster management needed
+          # - Ideal for SDK operations (export, transform, permissions)
           
           libraries:
             - pypi:
                 package: "databricks-sdk>=0.18.0"
             - pypi:
                 package: "pyyaml>=6.0"
-      
-      job_clusters:
-        - job_cluster_key: standard_cluster
-          new_cluster:
-            spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
-            node_type_id: "i3.xlarge"
-            num_workers: 1
-            data_security_mode: USER_ISOLATION
-            spark_conf:
-              spark.databricks.delta.preview.enabled: "true"
     
     # ========================================================================
     # JOB 3: Generate & Deploy Bundle
@@ -242,21 +238,19 @@ resources:
               permissions_dry_run: ${var.permissions_dry_run}
               embed_credentials: ${var.embed_credentials}
           
-          job_cluster_key: deployment_cluster
+          # SERVERLESS COMPUTE
+          # No cluster definition - uses Databricks serverless by default
+          # Benefits:
+          # - Faster startup (no cluster provisioning)
+          # - Auto-scaling based on workload
+          # - No cluster management needed
+          # - Ideal for bundle generation and deployment operations
           
           libraries:
             - pypi:
                 package: "databricks-sdk>=0.18.0"
             - pypi:
                 package: "pyyaml>=6.0"
-      
-      job_clusters:
-        - job_cluster_key: deployment_cluster
-          new_cluster:
-            spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
-            node_type_id: "i3.xlarge"
-            num_workers: 1
-            data_security_mode: USER_ISOLATION
 
 # ============================================================================
 # DEPLOYMENT TARGETS
