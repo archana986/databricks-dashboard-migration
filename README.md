@@ -1,314 +1,447 @@
 # Databricks Lakeview Dashboard Migration
 
-Modular, configuration-driven solution for migrating Databricks Lakeview dashboards between workspaces with automated catalog/schema transformations and permissions preservation.
+Migrate Databricks Lakeview dashboards between workspaces with catalog/schema transformations, preserving permissions and metadata.
 
-## Overview
-
-This solution provides **two migration approaches**:
-
-1. **Bundle Approach (Recommended)** - Uses Databricks Asset Bundles for infrastructure-as-code deployment
-2. **Manual Approach** - Traditional workflow with manual import and ACL application
-
-Both approaches use a **modular architecture** with:
-- Single configuration file (`config/config.yaml`)
-- Reusable Python helper modules (`helpers/`)
-- Simplified notebooks (2 per approach vs. original 5)
-- Fixed transformation logic (regex-based, not simple string replace)
+> **📦 Asset Bundle Implementation**: This migration uses Databricks Asset Bundles for deployment. All configuration is in `databricks.yml` (single source of truth).
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### Option 1: Bundle Approach (Recommended)
+### Prerequisites
 
-**Best for:** Production deployments, version control, CI/CD pipelines
+1. **Databricks CLI** installed and configured
+   ```bash
+   # Install Databricks CLI
+   curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+   
+   # Verify installation
+   databricks version
+   ```
 
-```mermaid
-flowchart LR
-    A[Configure<br/>config.yaml] --> B[Export & Transform<br/>Bundle_01]
-    B --> C[Generate & Deploy<br/>Bundle_02]
-    C --> D[Dashboards<br/>in Target]
-    
-    style A fill:#e3f2fd
-    style C fill:#e8f5e9
-    style D fill:#c8e6c9
-```
+2. **Unity Catalog Volume** created in your workspace
+   ```sql
+   -- Run in Databricks SQL Editor
+   CREATE SCHEMA IF NOT EXISTS <your_catalog>.<your_schema>;
+   CREATE VOLUME IF NOT EXISTS <your_catalog>.<your_schema>.dashboard_migration;
+   ```
 
-**Steps:**
-1. Edit `config/config.yaml` with your workspace details
-2. Run `Bundle/Bundle_01_Export_and_Transform.ipynb`
-3. Run `Bundle/Bundle_02_Generate_and_Deploy.ipynb`
-4. Verify dashboards in target workspace
-
-**See:** [Bundle/README.md](Bundle/README.md) for detailed instructions
-
-### Option 2: Manual Approach
-
-**Best for:** Testing, small migrations, learning the workflow
-
-```mermaid
-flowchart LR
-    A[Configure<br/>config.yaml] --> B[Export & Transform<br/>Notebook 01]
-    B --> C[Manual Import<br/>via UI]
-    C --> D[Apply Permissions<br/>Notebook 02]
-    D --> E[Dashboards<br/>in Target]
-    
-    style A fill:#e3f2fd
-    style C fill:#fff3e0
-    style E fill:#c8e6c9
-```
-
-**Steps:**
-1. Edit `config/config.yaml` with your workspace details
-2. Run `notebooks/01_Export_and_Transform.ipynb`
-3. Manually import `.lvdash.json` files via Databricks UI
-4. Run `notebooks/02_Apply_Permissions.ipynb`
-
-**See:** [TESTING_GUIDE.md](TESTING_GUIDE.md) for detailed instructions
+3. **Databricks authentication** configured
+   ```bash
+   # Configure authentication for your workspace
+   databricks auth login --host https://your-workspace.cloud.databricks.com
+   ```
 
 ---
 
-## Project Structure
+## 📥 Installation
+
+### Step 1: Clone Repository
+```bash
+git clone https://github.com/your-org/dashboard-migration.git
+cd dashboard-migration
+```
+
+### Step 2: Customize Configuration
+
+**IMPORTANT**: All configuration is in `databricks.yml`. Update the following sections:
+
+#### A. Update Variables (lines 35-90)
+```yaml
+variables:
+  # UPDATE THESE FOR YOUR ENVIRONMENT
+  catalog:
+    default: your_catalog_name  # Source catalog
+  
+  volume_base:
+    default: /Volumes/your_catalog/your_schema/dashboard_migration  # Your volume path
+  
+  source_workspace_url:
+    default: https://your-source-workspace.cloud.databricks.com  # Source workspace
+  
+  target_workspace_url:
+    default: https://your-target-workspace.cloud.databricks.com  # Target workspace
+  
+  warehouse_name:
+    default: your_warehouse_name  # SQL warehouse in target
+```
+
+#### B. Update Deployment Target (lines 170-180)
+```yaml
+targets:
+  dev:
+    workspace:
+      host: https://your-workspace.cloud.databricks.com  # CHANGE THIS
+    
+    variables:
+      catalog: your_catalog_name  # CHANGE THIS
+      volume_base: /Volumes/your_catalog/your_schema/dashboard_migration  # CHANGE THIS
+      source_workspace_url: https://your-workspace.cloud.databricks.com  # CHANGE THIS
+      target_workspace_url: https://your-target.cloud.databricks.com  # CHANGE THIS
+      warehouse_name: your_warehouse  # CHANGE THIS
+```
+
+---
+
+## 🎯 Usage
+
+### Method 1: Command Line (Recommended)
+
+#### Deploy the Bundle
+```bash
+# Deploy to dev environment
+databricks bundle deploy -t dev
+
+# Verify deployment
+databricks bundle validate -t dev
+```
+
+#### Run Migration Steps
+
+**Step 1: Generate Inventory**
+```bash
+# Discover dashboards and create inventory CSV
+databricks bundle run inventory_generation -t dev
+
+# View job status
+databricks jobs list-runs --limit 1
+```
+
+**Step 2: Export & Transform** (After inventory review)
+```bash
+# Export dashboards and apply transformations
+databricks bundle run export_transform -t dev
+```
+
+**Step 3: Generate & Deploy** (Final step)
+```bash
+# Generate asset bundle and deploy to target
+databricks bundle run generate_deploy -t dev
+```
+
+---
+
+### Method 2: Databricks UI
+
+#### Option A: Run as Workflows
+
+1. Navigate to **Workflows** in Databricks UI
+2. Find jobs named:
+   - `[Migration] 01 - Inventory Generation`
+   - `[Migration] 02 - Export & Transform`
+   - `[Migration] 03 - Generate & Deploy`
+3. Click **Run Now** on each job sequentially
+
+#### Option B: Run Notebooks Interactively
+
+**⚠️ IMPORTANT**: For interactive execution, you must set up test widgets first!
+
+1. **Open notebook** in Databricks: `Bundle/Bundle_00_Inventory_Generation.ipynb`
+
+2. **Run Cell 0.5** (Interactive Testing Setup) to create widgets:
+   ```python
+   # Uncomment and customize these values:
+   dbutils.widgets.text("catalog", "your_catalog_name")
+   dbutils.widgets.text("volume_base", "/Volumes/your_catalog/your_schema/dashboard_migration")
+   dbutils.widgets.text("source_workspace_url", "https://your-workspace.cloud.databricks.com")
+   dbutils.widgets.text("inventory_path", "dashboard_inventory")
+   dbutils.widgets.text("audit_lookback_days", "90")
+   ```
+
+3. **Run remaining cells** sequentially
+
+4. Repeat for `Bundle_01` and `Bundle_02` notebooks
+
+---
+
+## 📂 Project Structure
 
 ```
 dashboard-migration/
-├── config/
-│   ├── config.yaml                    # Edit this for your environment
-│   └── config_example.yaml            # Template with documentation
-│
-├── helpers/                            # Reusable Python modules
-│   ├── auth.py                        # Workspace authentication
-│   ├── discovery.py                   # Dashboard discovery
-│   ├── export.py                      # Dashboard export
-│   ├── transform.py                   # Catalog/schema transformation
-│   ├── permissions.py                 # ACL management
-│   ├── bundle_generator.py            # Bundle generation
-│   └── volume_utils.py                # Volume operations
-│
-├── Bundle/                             # Bundle approach (recommended)
-│   ├── Bundle_01_Export_and_Transform.ipynb
-│   ├── Bundle_02_Generate_and_Deploy.ipynb
-│   └── README.md
-│
-├── notebooks/                          # Manual approach
-│   ├── 01_Export_and_Transform.ipynb
-│   └── 02_Apply_Permissions.ipynb
-│
-├── TESTING_GUIDE.md                   # Comprehensive testing guide
-├── START_HERE.md                      # Overview of solution
-├── README_MODULAR.md                  # Architecture details
-├── DATABRICKS_REPOS_SETUP.md          # Repos setup guide
-└── catalog_schema_mapping_template.csv # CSV template
+├── databricks.yml              # SINGLE SOURCE OF TRUTH - All configuration here
+├── Bundle/
+│   ├── Bundle_00_Inventory_Generation.ipynb  # Step 1: Discover dashboards
+│   ├── Bundle_01_Export_and_Transform.ipynb  # Step 2: Export & transform
+│   └── Bundle_02_Generate_and_Deploy.ipynb   # Step 3: Deploy to target
+├── helpers/                     # Python helper functions
+│   ├── __init__.py
+│   ├── auth.py                 # Authentication
+│   ├── discovery.py            # Dashboard discovery
+│   ├── export.py               # Dashboard export
+│   ├── transform.py            # Catalog/schema transformations
+│   ├── permissions.py          # Permission management
+│   ├── volume_utils.py         # Volume operations
+│   └── bundle_generator.py     # Asset bundle generation
+└── README.md                   # This file
 ```
 
 ---
 
-## Features
+## ⚙️ Configuration Reference
 
-**Core Capabilities:**
-- Migrate Lakeview dashboards between workspaces
-- Transform catalog/schema/table references via CSV mappings
-- Preserve and restore dashboard permissions (best-effort)
-- Support multiple authentication methods (OAuth, PAT, Service Principal)
+### Core Variables
 
-**Modular Architecture:**
-- Single configuration file for all settings
-- Reusable helper modules (no code duplication)
-- Two deployment options (Bundle vs Manual)
-- Simplified notebooks (2 instead of 5)
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `catalog` | Source catalog to scan | `production_data` |
+| `volume_base` | Base volume path | `/Volumes/main/migration/dashboard_migration` |
+| `source_workspace_url` | Source workspace URL | `https://source.cloud.databricks.com` |
+| `target_workspace_url` | Target workspace URL | `https://target.cloud.databricks.com` |
+| `warehouse_name` | SQL warehouse name | `migration_warehouse` |
 
-**Bundle Approach Benefits:**
-- Infrastructure-as-code (declarative YAML)
-- Version control friendly
-- Automated deployment with validation
-- CI/CD pipeline ready
+### Path Variables (Relative to volume_base)
 
-**Manual Approach Benefits:**
-- Simpler workflow for testing
-- More control over import process
-- Better for learning and debugging
-- No CLI dependencies
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `inventory_path` | `dashboard_inventory` | Inventory CSV location |
+| `exported_path` | `exported` | Exported JSONs location |
+| `transformed_path` | `transformed` | Transformed JSONs location |
+| `mappings_path` | `mappings` | Mapping CSV location |
+| `bundles_path` | `bundles` | Generated bundles location |
 
----
+### Options
 
-## Approach Comparison
-
-| Factor | Bundle Approach | Manual Approach |
-|--------|----------------|-----------------|
-| **Setup complexity** | Medium (CLI required) | Low (UI-based) |
-| **Deployment** | Automated | Manual import |
-| **Version control** | Yes (declarative YAML) | No |
-| **CI/CD ready** | Yes | No |
-| **Best for** | Production, teams | Testing, learning |
-| **Permissions** | Applied automatically | Applied via notebook |
-| **Validation** | Built-in CLI validation | Manual verification |
-| **Rollback** | `databricks bundle destroy` | Manual deletion |
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `audit_lookback_days` | `90` | Days to look back for audit data |
+| `transformation_enabled` | `true` | Apply catalog/schema transformations |
+| `capture_permissions` | `true` | Export dashboard permissions |
+| `apply_permissions` | `true` | Apply permissions to target |
+| `permissions_dry_run` | `true` | Simulate permission application |
+| `embed_credentials` | `true` | Embed credentials in dashboards |
 
 ---
 
-## Prerequisites
+## 🔄 Workflow
 
-**Required:**
-- Access to source and target Databricks workspaces
-- Permissions to create Unity Catalog volumes
-- Databricks Runtime 11.3 LTS or higher
-- One of: OAuth (`az login`), Service Principal, or PAT tokens
+### Step 1: Inventory Generation
 
-**For Bundle Approach:**
-- Databricks CLI installed and configured
-- `databricks bundle` command available
+**What it does:**
+- Discovers dashboards using system tables
+- Fetches metadata (names, lineage, audit logs)
+- Generates comprehensive inventory CSV
 
-**For Manual Approach:**
-- Access to Databricks workspace UI
+**Output:**
+- `<volume_base>/dashboard_inventory/inventory.csv`
+
+**Fields in inventory:**
+- dashboard_id, dashboard_name, reference_count
+- catalog_count, table_count, unique_tables
+- last_accessed, first_accessed, unique_users
+- complexity (High/Medium/Low)
+- activity_level (Very Active/Active/Moderate/Inactive)
+
+### Step 2: Export & Transform
+
+**What it does:**
+- Exports dashboard JSONs from inventory
+- Applies catalog/schema/table transformations
+- Exports permissions
+
+**Inputs:**
+- `inventory.csv` from Step 1
+- `mappings/catalog_schema_mapping.csv` (create this file)
+
+**Outputs:**
+- `<volume_base>/exported/*.lvdash.json`
+- `<volume_base>/transformed/*.lvdash.json`
+- `<volume_base>/exported/*_permissions.json`
+
+**Mapping CSV format:**
+```csv
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table
+prod_data,sales,orders,dev_data,sales_test,orders
+```
+
+### Step 3: Generate & Deploy
+
+**What it does:**
+- Generates Databricks Asset Bundle structure
+- Deploys dashboards to target workspace
+- Applies permissions
+
+**Output:**
+- `<volume_base>/bundles/` with deployment bundle
+- Dashboards created in target workspace
 
 ---
 
-## Authentication
+## 🛠️ Advanced Configuration
 
-Configure in `config/config.yaml`:
+### Multiple Environments
 
-### OAuth (Recommended)
+Define multiple targets for different environments:
 
 ```yaml
-auth:
-  method: "oauth"
-  # No additional config needed - uses notebook authentication
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: https://dev-workspace.cloud.databricks.com
+    variables:
+      catalog: dev_catalog
+      permissions_dry_run: "true"
+  
+  prod:
+    mode: production
+    workspace:
+      host: https://prod-workspace.cloud.databricks.com
+    variables:
+      catalog: prod_catalog
+      permissions_dry_run: "false"  # Actually apply in prod
 ```
 
-**Best for:** Interactive use, development, most scenarios
+Deploy to specific environment:
+```bash
+databricks bundle deploy -t dev
+databricks bundle deploy -t prod
+```
 
-### Service Principal
+### Custom Cluster Configuration
+
+By default, **Job 1 uses serverless compute** (fastest, recommended).
+
+To use a standard cluster instead, uncomment in `databricks.yml`:
 
 ```yaml
-auth:
-  method: "service_principal"
-  service_principal:
-    client_id_scope: "migration"
-    client_id_key: "sp-client-id"
-    client_secret_scope: "migration"
-    client_secret_key: "sp-secret"
-    tenant_id_scope: "migration"
-    tenant_id_key: "sp-tenant"
+inventory_generation:
+  tasks:
+    - task_key: generate_inventory
+      # Uncomment for standard cluster:
+      new_cluster:
+        spark_version: "17.3.x-scala2.12"
+        node_type_id: "i3.xlarge"
+        num_workers: 2
+        runtime_engine: PHOTON
 ```
 
-**Best for:** Production, CI/CD, automation
+---
 
-### PAT Tokens
+## 📊 Monitoring & Troubleshooting
 
+### View Job Logs
+
+**CLI:**
+```bash
+# List recent runs
+databricks jobs list-runs --limit 5
+
+# Get specific run details
+databricks runs get --run-id <run_id>
+
+# View run output
+databricks runs get-output --run-id <run_id>
+```
+
+**UI:**
+1. Navigate to **Workflows**
+2. Click on job name
+3. View **Runs** tab
+4. Click on specific run for detailed logs
+
+### Common Issues
+
+#### 1. `SCHEMA_NOT_FOUND` Error
+**Solution**: Create the Unity Catalog schema and volume:
+```sql
+CREATE SCHEMA IF NOT EXISTS <catalog>.<schema>;
+CREATE VOLUME IF NOT EXISTS <catalog>.<schema>.dashboard_migration;
+```
+
+#### 2. `ModuleNotFoundError: No module named 'helpers'`
+**Solution**: Redeploy bundle to sync helper files:
+```bash
+databricks bundle deploy -t dev --force
+```
+
+#### 3. Dashboards Not Found in Inventory
+**Possible causes:**
+- Dashboards were deleted but lineage persists
+- Incorrect catalog name in configuration
+- Dashboards don't query the specified catalog
+
+**Check audit logs** in notebook output for deletion events.
+
+#### 4. Permission Application Fails
+**Solution**: Ensure `permissions_dry_run: "true"` for testing, then set to `"false"` for actual application.
+
+---
+
+## 🔒 Security & Permissions
+
+### Required Permissions
+
+**Source Workspace:**
+- READ access to dashboards
+- READ access to system tables (`system.access.table_lineage`, `system.access.audit`)
+
+**Target Workspace:**
+- CREATE dashboard permissions
+- WRITE access to Unity Catalog volume
+- SQL warehouse USAGE permissions
+
+### Authentication Methods
+
+**OAuth (Recommended):**
+- Uses notebook's built-in authentication
+- No token management required
+- Inherits your permissions
+
+**Personal Access Token (Alternative):**
 ```yaml
-auth:
-  method: "pat"
-  pat:
-    secret_scope: "migration"
-    secret_key: "source-token"
+variables:
+  source_auth_method: pat
+  source_pat_scope: migration_secrets
+  source_pat_key: source_token
 ```
 
-**Best for:** Quick tests, development
+---
+
+## 📝 Best Practices
+
+1. **Test in Dev First**: Always test migration in dev environment
+2. **Review Inventory**: Inspect `inventory.csv` before proceeding
+3. **Dry Run Permissions**: Keep `permissions_dry_run: "true"` initially
+4. **Backup Dashboards**: Export originals before transformation
+5. **Version Control**: Commit `databricks.yml` changes to git
+6. **Monitor Jobs**: Check logs for warnings/errors
+7. **Incremental Migration**: Migrate in batches, not all at once
 
 ---
 
-## Getting Started
+## 🤝 Contributing
 
-### Step 1: Setup
-
-1. **Clone or sync this repository to Databricks**
-   - See [DATABRICKS_REPOS_SETUP.md](DATABRICKS_REPOS_SETUP.md) for Repos setup
-   - Or manually upload files to workspace
-
-2. **Edit configuration**
-   - Copy `config/config_example.yaml` to `config/config.yaml`
-   - Update workspace URLs, authentication, paths
-
-3. **Create secrets (if using PAT or Service Principal)**
-   ```python
-   dbutils.secrets.createScope(scope="migration")
-   dbutils.secrets.put(scope="migration", key="source-token", string_value="...")
-   ```
-
-4. **Create Unity Catalog volume**
-   ```sql
-   CREATE VOLUME IF NOT EXISTS catalog.schema.dashboard_migration;
-   ```
-
-5. **Create CSV mapping file**
-   - Edit `catalog_schema_mapping_template.csv`
-   - Upload to volume at path specified in config
-
-### Step 2: Choose Your Approach
-
-**For Bundle Approach:**
-- Follow [Bundle/README.md](Bundle/README.md)
-- Run `Bundle_01` then `Bundle_02`
-
-**For Manual Approach:**
-- Follow [TESTING_GUIDE.md](TESTING_GUIDE.md)
-- Run `01_Export_and_Transform`, manual import, then `02_Apply_Permissions`
-
-### Step 3: Test and Verify
-
-1. Check dashboards imported to target workspace
-2. Verify catalog/schema names updated correctly
-3. Test dashboard queries run successfully
-4. Confirm permissions applied correctly
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Test thoroughly
+5. Submit a pull request
 
 ---
 
-## Documentation
+## 📄 License
 
-- **[START_HERE.md](START_HERE.md)** - Overview of the solution and what was done
-- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Comprehensive step-by-step testing guide
-- **[README_MODULAR.md](README_MODULAR.md)** - Detailed architecture documentation
-- **[QUICKSTART_MODULAR.md](QUICKSTART_MODULAR.md)** - Quick reference guide
-- **[Bundle/README.md](Bundle/README.md)** - Bundle approach specific documentation
-- **[DATABRICKS_REPOS_SETUP.md](DATABRICKS_REPOS_SETUP.md)** - Setup Databricks Repos
+[Your License Here]
 
 ---
 
-## Troubleshooting
+## 💬 Support
 
-**Common Issues:**
-
-1. **"Module not found: helpers"**
-   - Ensure `helpers/` folder is in the same directory as notebooks
-   - Add `sys.path.insert(0, '../helpers')` at top of notebook
-
-2. **"Config file not found"**
-   - Verify `config/config.yaml` exists
-   - Check path in notebook: `load_config('../config/config.yaml')`
-
-3. **"Dashboard not found in inventory"**
-   - Check `dashboard_selection` method in config
-   - Verify catalog name or dashboard IDs are correct
-
-4. **"Transformation not working"**
-   - Verify CSV mapping file path in config
-   - Check CSV has correct old_catalog/old_schema/new_catalog/new_schema columns
-   - Ensure no extra spaces in CSV values
-
-5. **"Bundle validation failed"**
-   - Run `databricks bundle validate` in bundle directory
-   - Check `databricks.yml` syntax
-   - Verify warehouse name exists in target
-
-**For more troubleshooting:** See [TESTING_GUIDE.md](TESTING_GUIDE.md) - Troubleshooting section
+For issues or questions:
+- GitHub Issues: [link]
+- Documentation: [link]
+- Contact: [email]
 
 ---
 
-## Support and Contributing
+## 🎓 Additional Resources
 
-**Questions or Issues?**
-- Review documentation files (especially TESTING_GUIDE.md)
-- Check helper module source code for function details
-- Verify configuration settings in config.yaml
-
-**Customization:**
-- Helper modules are designed to be extended
-- Add custom discovery methods in `helpers/discovery.py`
-- Add custom transformations in `helpers/transform.py`
-- Modify bundle generation logic in `helpers/bundle_generator.py`
+- [Databricks Asset Bundles Documentation](https://docs.databricks.com/en/dev-tools/bundles/index.html)
+- [Lakeview Dashboard API Reference](https://docs.databricks.com/api/workspace/lakeview)
+- [Unity Catalog Volumes](https://docs.databricks.com/en/connect/unity-catalog/volumes.html)
+- [System Tables Reference](https://docs.databricks.com/en/administration-guide/system-tables/index.html)
 
 ---
 
-**Version:** 2.0 (Modular)  
-**Last Updated:** January 2026  
-**Compatible with:** Databricks Runtime 11.3 LTS+
+**Last Updated**: 2026-01-30  
+**Version**: 2.0 (Asset Bundle Implementation)

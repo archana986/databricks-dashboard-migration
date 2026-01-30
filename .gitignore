@@ -12,7 +12,8 @@ env/
 
 # User-specific files
 catalog_schema_mapping.csv
-config/config.yaml
+config/config.yaml  # Legacy config file (no longer used - config is in databricks.yml)
+dev_config.py  # For local interactive testing only
 
 # Test/output files
 transformed/

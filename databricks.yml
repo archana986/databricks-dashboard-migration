@@ -4,6 +4,9 @@
 # 1. Inventory Generation - Discover dashboards and create inventory CSV
 # 2. Export & Transform - Export and transform dashboards from inventory
 # 3. Generate & Deploy - Create bundle and deploy to target workspace
+#
+# SINGLE SOURCE OF TRUTH: All configuration is in this file
+# Update the variables below and target-specific overrides as needed
 
 bundle:
   name: dashboard_migration
@@ -13,20 +16,108 @@ sync:
   paths:
     - helpers
     - Bundle
-    - config
 
+# ============================================================================
+# CONFIGURATION VARIABLES
+# ============================================================================
+# These are the default values. Override them in the targets section below
+# for environment-specific configurations (dev, prod, etc.)
 variables:
+  # ──────────────────────────────────────────────────────────────────────────
+  # SOURCE & TARGET WORKSPACES
+  # ──────────────────────────────────────────────────────────────────────────
+  source_workspace_url:
+    description: Source workspace URL where dashboards currently exist
+    default: https://e2-demo-field-eng.cloud.databricks.com
+  
+  target_workspace_url:
+    description: Target workspace URL where dashboards will be migrated
+    default: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # CATALOG & VOLUME CONFIGURATION
+  # ──────────────────────────────────────────────────────────────────────────
   catalog:
     description: Source catalog to scan for dashboards
     default: archana_krish_fe_dsa
   
   volume_base:
-    description: Base volume path for migration artifacts
-    default: /Volumes/main/migration/dashboard_migration
+    description: Base volume path for migration artifacts (format /Volumes/catalog/schema/volume)
+    default: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # PATHS (relative to volume_base)
+  # ──────────────────────────────────────────────────────────────────────────
+  inventory_path:
+    description: Subdirectory for inventory CSV files
+    default: dashboard_inventory
+  
+  exported_path:
+    description: Subdirectory for exported dashboard JSONs
+    default: exported
+  
+  transformed_path:
+    description: Subdirectory for transformed dashboard JSONs
+    default: transformed
+  
+  mappings_path:
+    description: Subdirectory for mapping CSV files
+    default: mappings
+  
+  bundles_path:
+    description: Subdirectory for generated asset bundles
+    default: bundles
+  
+  target_parent_path:
+    description: Target workspace folder path for migrated dashboards
+    default: /Shared/Migrated_Dashboards
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # WAREHOUSE CONFIGURATION
+  # ──────────────────────────────────────────────────────────────────────────
+  warehouse_name:
+    description: SQL warehouse name in target workspace for dashboard execution
+    default: ak-migration
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # INVENTORY OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
   audit_lookback_days:
     description: Days to look back for audit data
     default: 90
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # TRANSFORMATION OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  transformation_enabled:
+    description: Whether to apply catalog/schema/table transformations (true/false)
+    default: "true"
+  
+  mapping_csv_path:
+    description: Path to catalog/schema/table mapping CSV (relative to volume_base)
+    default: mappings/catalog_schema_mapping.csv
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # PERMISSIONS OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  capture_permissions:
+    description: Whether to export permissions from source dashboards (true/false)
+    default: "true"
+  
+  apply_permissions:
+    description: Whether to apply permissions to target dashboards (true/false)
+    default: "true"
+  
+  permissions_dry_run:
+    description: If true simulates permission application without actually applying (true/false)
+    default: "true"
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # BUNDLE OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  embed_credentials:
+    description: Whether to embed credentials in deployed dashboards (true/false)
+    default: "true"
 
 resources:
   jobs:
@@ -42,8 +133,13 @@ resources:
           notebook_task:
             notebook_path: Bundle/Bundle_00_Inventory_Generation.ipynb
             base_parameters:
+              # Core config
               catalog: ${var.catalog}
               volume_base: ${var.volume_base}
+              source_workspace_url: ${var.source_workspace_url}
+              # Paths
+              inventory_path: ${var.inventory_path}
+              # Options
               audit_lookback_days: ${var.audit_lookback_days}
           
           # TRUE SERVERLESS COMPUTE
@@ -82,7 +178,20 @@ resources:
           notebook_task:
             notebook_path: Bundle/Bundle_01_Export_and_Transform.ipynb
             base_parameters:
+              # Core config
+              catalog: ${var.catalog}
               volume_base: ${var.volume_base}
+              source_workspace_url: ${var.source_workspace_url}
+              target_workspace_url: ${var.target_workspace_url}
+              # Paths
+              inventory_path: ${var.inventory_path}
+              exported_path: ${var.exported_path}
+              transformed_path: ${var.transformed_path}
+              mappings_path: ${var.mappings_path}
+              # Options
+              transformation_enabled: ${var.transformation_enabled}
+              mapping_csv_path: ${var.mapping_csv_path}
+              capture_permissions: ${var.capture_permissions}
           
           job_cluster_key: standard_cluster
           
@@ -114,7 +223,20 @@ resources:
           notebook_task:
             notebook_path: Bundle/Bundle_02_Generate_and_Deploy.ipynb
             base_parameters:
+              # Core config
+              catalog: ${var.catalog}
               volume_base: ${var.volume_base}
+              target_workspace_url: ${var.target_workspace_url}
+              # Paths
+              transformed_path: ${var.transformed_path}
+              bundles_path: ${var.bundles_path}
+              target_parent_path: ${var.target_parent_path}
+              # Warehouse
+              warehouse_name: ${var.warehouse_name}
+              # Options
+              apply_permissions: ${var.apply_permissions}
+              permissions_dry_run: ${var.permissions_dry_run}
+              embed_credentials: ${var.embed_credentials}
           
           job_cluster_key: deployment_cluster
           
@@ -132,31 +254,51 @@ resources:
             num_workers: 1
             data_security_mode: USER_ISOLATION
 
-# Deployment targets for different environments
+# ============================================================================
+# DEPLOYMENT TARGETS
+# ============================================================================
+# Define environment-specific overrides here
+# Customize these for your workspaces
 targets:
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEV ENVIRONMENT
+  # ──────────────────────────────────────────────────────────────────────────
   dev:
     mode: development
     workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com
+      host: https://e2-demo-field-eng.cloud.databricks.com  # CHANGE THIS to your dev workspace URL
     
     variables:
-      catalog: archana_krish_fe_dsa
-      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
+      # Core configuration - CUSTOMIZE THESE
+      catalog: archana_krish_fe_dsa  # Source catalog in dev
+      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration  # Dev volume path
+      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # Usually same as host
+      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com  # Target workspace
+      warehouse_name: ak-migration  # SQL warehouse name in target
+      
+      # Dev-specific overrides (optional)
+      # permissions_dry_run: "true"  # Keep true for testing
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # PROD ENVIRONMENT (Template - customize before use)
+  # ──────────────────────────────────────────────────────────────────────────
   prod:
     mode: production
     workspace:
-      host: https://your-prod-workspace.cloud.databricks.com
+      host: https://your-prod-workspace.cloud.databricks.com  # CHANGE THIS
     
     variables:
-      catalog: production_catalog
-      volume_base: /Volumes/production_catalog/migration/dashboard_migration
+      # Core configuration - CUSTOMIZE THESE
+      catalog: production_catalog  # Source catalog in prod
+      volume_base: /Volumes/production_catalog/migration/dashboard_migration  # Prod volume path
+      source_workspace_url: https://your-prod-workspace.cloud.databricks.com  # CHANGE THIS
+      target_workspace_url: https://your-prod-target.cloud.databricks.com  # CHANGE THIS
+      warehouse_name: production_warehouse  # CHANGE THIS
+      
+      # Prod-specific overrides
+      permissions_dry_run: "false"  # Actually apply permissions in prod
     
-    # Production safeguards
+    # Production safeguards (optional)
     permissions:
       - level: CAN_MANAGE
-        group_name: data_platform_admins
-
-# Include common resources (optional)
-include:
-  - "config/*.yaml"
+        group_name: data_platform_admins  # CHANGE THIS to your admin group
