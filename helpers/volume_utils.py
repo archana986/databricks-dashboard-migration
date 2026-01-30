@@ -94,3 +94,15 @@ def read_csv_from_volume(csv_path: str) -> List[Dict]:
     content = read_volume_file(csv_path)
     df = pd.read_csv(io.StringIO(content))
     return df.to_dict('records')
+
+def write_csv_to_volume(csv_path: str, dataframe) -> None:
+    """
+    Write pandas DataFrame to volume as CSV.
+    
+    Args:
+        csv_path: Volume path for CSV file
+        dataframe: Pandas DataFrame to write
+    """
+    csv_content = dataframe.to_csv(index=False)
+    write_volume_file(csv_path, csv_content, overwrite=True)
+    print(f"✅ Wrote {len(dataframe)} rows to {csv_path}")

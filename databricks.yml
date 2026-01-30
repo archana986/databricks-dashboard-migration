@@ -1,0 +1,152 @@
+# Databricks Asset Bundle for Dashboard Migration
+# 
+# This bundle defines three independent jobs for dashboard migration:
+# 1. Inventory Generation - Discover dashboards and create inventory CSV
+# 2. Export & Transform - Export and transform dashboards from inventory
+# 3. Generate & Deploy - Create bundle and deploy to target workspace
+
+bundle:
+  name: dashboard_migration
+
+variables:
+  catalog:
+    description: Source catalog to scan for dashboards
+    default: archana_krish_fe_dsa
+  
+  volume_base:
+    description: Base volume path for migration artifacts
+    default: /Volumes/main/migration/dashboard_migration
+  
+  audit_lookback_days:
+    description: Days to look back for audit data
+    default: 90
+
+resources:
+  jobs:
+    # ========================================================================
+    # JOB 1: Inventory Generation
+    # ========================================================================
+    inventory_generation:
+      name: "[Migration] 01 - Inventory Generation"
+      description: "Discover dashboards and generate comprehensive inventory CSV with metadata"
+      
+      tasks:
+        - task_key: generate_inventory
+          notebook_task:
+            notebook_path: ./Bundle/Bundle_00_Inventory_Generation
+            base_parameters:
+              catalog: ${var.catalog}
+              volume_base: ${var.volume_base}
+              audit_lookback_days: ${var.audit_lookback_days}
+          
+          # Serverless compute (recommended for SQL queries)
+          # Faster startup, auto-scaling, no cluster management
+          job_cluster_key: serverless_cluster
+      
+      job_clusters:
+        - job_cluster_key: serverless_cluster
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 2
+            runtime_engine: PHOTON
+            data_security_mode: USER_ISOLATION
+            spark_conf:
+              spark.databricks.delta.preview.enabled: "true"
+      
+      # Optional: Schedule to refresh inventory weekly
+      # schedule:
+      #   quartz_cron_expression: "0 0 2 ? * MON"
+      #   timezone_id: "America/Los_Angeles"
+      #   pause_status: UNPAUSED
+    
+    # ========================================================================
+    # JOB 2: Export & Transform
+    # ========================================================================
+    export_transform:
+      name: "[Migration] 02 - Export & Transform"
+      description: "Export and transform dashboards based on inventory CSV"
+      
+      tasks:
+        - task_key: export_and_transform
+          notebook_task:
+            notebook_path: ./Bundle/Bundle_01_Export_and_Transform
+            base_parameters:
+              volume_base: ${var.volume_base}
+          
+          job_cluster_key: standard_cluster
+          
+          libraries:
+            - pypi:
+                package: "databricks-sdk>=0.18.0"
+            - pypi:
+                package: "pyyaml>=6.0"
+      
+      job_clusters:
+        - job_cluster_key: standard_cluster
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 1
+            data_security_mode: USER_ISOLATION
+            spark_conf:
+              spark.databricks.delta.preview.enabled: "true"
+    
+    # ========================================================================
+    # JOB 3: Generate & Deploy Bundle
+    # ========================================================================
+    generate_deploy:
+      name: "[Migration] 03 - Generate & Deploy"
+      description: "Generate Databricks Asset Bundle and deploy to target workspace"
+      
+      tasks:
+        - task_key: generate_and_deploy
+          notebook_task:
+            notebook_path: ./Bundle/Bundle_02_Generate_and_Deploy
+            base_parameters:
+              volume_base: ${var.volume_base}
+          
+          job_cluster_key: deployment_cluster
+          
+          libraries:
+            - pypi:
+                package: "databricks-sdk>=0.18.0"
+            - pypi:
+                package: "pyyaml>=6.0"
+      
+      job_clusters:
+        - job_cluster_key: deployment_cluster
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "i3.xlarge"
+            num_workers: 1
+            data_security_mode: USER_ISOLATION
+
+# Deployment targets for different environments
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: https://e2-demo-field-eng.cloud.databricks.com
+    
+    variables:
+      catalog: archana_krish_fe_dsa
+      volume_base: /Volumes/main/migration/dashboard_migration_dev
+  
+  prod:
+    mode: production
+    workspace:
+      host: https://your-prod-workspace.cloud.databricks.com
+    
+    variables:
+      catalog: production_catalog
+      volume_base: /Volumes/main/migration/dashboard_migration_prod
+    
+    # Production safeguards
+    permissions:
+      - level: CAN_MANAGE
+        group_name: data_platform_admins
+
+# Include common resources (optional)
+include:
+  - "config/*.yaml"

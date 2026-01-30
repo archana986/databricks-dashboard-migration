@@ -150,6 +150,39 @@ dashboard_selection:
     # Note: Only includes dashboards that actually query the specified catalog
 
 # ============================================================================
+# INVENTORY CONFIGURATION (for Bundle_00_Inventory_Generation)
+# ============================================================================
+inventory:
+  # Date range for audit data (days back from current date)
+  # Used to determine dashboard activity levels and last accessed dates
+  # Recommendation: 90 days balances data freshness with query performance
+  audit_lookback_days: 90
+  
+  # Minimum table count to include dashboard in inventory (0 = include all)
+  # Use case: Filter out simple dashboards or those with no data queries
+  # Example: Set to 5 to only include dashboards using 5+ tables
+  min_table_count: 0
+  
+  # Include inactive dashboards (no recent access) in inventory
+  # If true: All discovered dashboards included, regardless of activity
+  # If false: Only dashboards accessed within audit_lookback_days
+  # Recommendation: true for comprehensive inventory, false for active-only migration
+  include_inactive: true
+  
+  # Export inventory CSV settings
+  export:
+    # Include catalogs_used array field in inventory CSV
+    # Benefit: See which catalogs each dashboard references
+    # Drawback: Can make CSV very wide for dashboards using many catalogs
+    include_catalogs_used: true
+    
+    # Include tables_used array field in inventory CSV
+    # WARNING: This field can be VERY large (100+ tables per dashboard)
+    # Recommendation: Keep false unless you specifically need table-level detail
+    # Alternative: Query system.access.table_lineage directly for specific dashboards
+    include_tables_used: false
+
+# ============================================================================
 # TRANSFORMATION OPTIONS - Rewrite catalog/schema/table references
 # ============================================================================
 transformation:
