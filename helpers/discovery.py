@@ -66,10 +66,11 @@ def _discover_by_catalog(
 def _discover_via_system_tables(client: WorkspaceClient, catalog: str) -> List[Dict]:
     """Fast discovery using system.access.table_lineage."""
     query = f"""
-    SELECT DISTINCT dashboard_id, dashboard_name
+    SELECT DISTINCT entity_id
     FROM system.access.table_lineage
     WHERE source_table_catalog = '{catalog}'
-      AND dashboard_id IS NOT NULL
+      AND entity_type = 'DASHBOARD'
+      AND entity_id IS NOT NULL
     """
     
     try:
