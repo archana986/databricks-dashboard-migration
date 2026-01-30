@@ -10,12 +10,12 @@ source:
   workspace_url: "https://e2-demo-field-eng.cloud.databricks.com"
   
   auth:
-    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    method: "oauth"  # Options: "pat", "oauth", "service_principal"
     
     # PAT Token (currently using)
-    pat:
-      secret_scope: "migration"
-      secret_key: "source-token"
+    # pat:
+    #   secret_scope: "migration"
+    #   secret_key: "source-token"
     
     # OAuth (recommended - uncomment to use)
     # method: "oauth"
@@ -29,12 +29,12 @@ target:
   workspace_url: "https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com"
   
   auth:
-    method: "pat"  # Options: "pat", "oauth", "service_principal"
+    method: "oauth"  # Options: "pat", "oauth", "service_principal"
     
     # PAT Token (currently using)
-    pat:
-      secret_scope: "migration"
-      secret_key: "target-token"
+    # pat:
+    #   secret_scope: "migration"
+    #   secret_key: "target-token"
     
     # OAuth (recommended - uncomment to use)
     # method: "oauth"
@@ -105,12 +105,12 @@ permissions:
 # ============================================================================
 warehouse:
   use_name_lookup: true
-  warehouse_name: "Main Warehouse"
+  warehouse_name: "ak-migration"
 
 # ============================================================================
 # BUNDLE OPTIONS (if using bundle deployment)
 # ============================================================================
 bundle:
   name: "dashboard_migration"
-  embed_credentials: true
-  mode: "production"
+  embed_credentials: false
+  mode: "development"
