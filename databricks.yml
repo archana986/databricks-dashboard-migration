@@ -8,10 +8,11 @@
 bundle:
   name: dashboard_migration
 
-# Sync workspace files (helpers directory needed by notebooks)
+# Sync workspace files (helpers directory and notebooks)
 sync:
   paths:
     - helpers
+    - Bundle
 
 variables:
   catalog:
@@ -38,7 +39,7 @@ resources:
       tasks:
         - task_key: generate_inventory
           notebook_task:
-            notebook_path: ./Bundle/Bundle_00_Inventory_Generation.ipynb
+            notebook_path: Bundle/Bundle_00_Inventory_Generation.ipynb
             base_parameters:
               catalog: ${var.catalog}
               volume_base: ${var.volume_base}
@@ -78,7 +79,7 @@ resources:
       tasks:
         - task_key: export_and_transform
           notebook_task:
-            notebook_path: ./Bundle/Bundle_01_Export_and_Transform.ipynb
+            notebook_path: Bundle/Bundle_01_Export_and_Transform.ipynb
             base_parameters:
               volume_base: ${var.volume_base}
           
@@ -110,7 +111,7 @@ resources:
       tasks:
         - task_key: generate_and_deploy
           notebook_task:
-            notebook_path: ./Bundle/Bundle_02_Generate_and_Deploy.ipynb
+            notebook_path: Bundle/Bundle_02_Generate_and_Deploy.ipynb
             base_parameters:
               volume_base: ${var.volume_base}
           
