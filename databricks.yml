@@ -129,8 +129,8 @@ resources:
     # JOB 1: Inventory Generation
     # ========================================================================
     inventory_generation:
-      name: "[Migration] 01 - Inventory Generation"
-      description: "Discover dashboards and generate comprehensive inventory CSV with metadata"
+      name: "[Migration] Step 1 - Inventory Generation"
+      description: "Generate dashboard inventory. After completion, manually run Step 2 in Databricks UI."
       
       tasks:
         - task_key: generate_inventory
@@ -174,8 +174,8 @@ resources:
     # JOB 2: Export & Transform
     # ========================================================================
     export_transform:
-      name: "[Migration] 02 - Export & Transform"
-      description: "Export and transform dashboards based on QC-approved inventory CSV"
+      name: "[Migration] Step 3 - Export & Transform"
+      description: "Export and transform dashboards. Requires Step 2 (manual review) to be completed first."
       
       tasks:
         - task_key: export_and_transform
@@ -219,8 +219,8 @@ resources:
     # JOB 3: Generate & Deploy Bundle
     # ========================================================================
     generate_deploy:
-      name: "[Migration] 03 - Generate & Deploy"
-      description: "Generate Databricks Asset Bundle and deploy to target workspace"
+      name: "[Migration] Step 4 - Generate & Deploy"
+      description: "Generate asset bundles and deploy to target. Final step."
       
       tasks:
         - task_key: generate_and_deploy

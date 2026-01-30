@@ -115,72 +115,46 @@ databricks jobs list-runs --limit 1
 
 ---
 
-**Step 1a: Review & Approve** (MANUAL STEP - Choose One Option)
+**Step 2: Review & Approve Inventory** (REQUIRED - Databricks UI Only)
 
-## Option A: Manual CSV Editing
+This is a **mandatory manual step** that must be completed in Databricks UI.
 
-1. **Download** the inventory CSV from the volume:
-   - Via UI: Navigate to Catalog Explorer → Your Volume → `dashboard_inventory/inventory.csv`
-   - Via code: Use `dbutils.fs.head()` or download via API
+**Instructions:**
 
-2. **Edit** the file:
-   - Open in Excel or text editor
-   - Delete rows for dashboards you don't want to migrate
-   - Save your changes
+1. **Open the notebook** in Databricks UI:
+   - Navigate to Workspace
+   - Find: `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
+   - Open and attach to a cluster
 
-3. **Upload** to approved location:
-   - Via UI: Navigate to `dashboard_inventory_approved/` and upload as `inventory.csv`
-   - Via code:
-     ```python
-     # Upload edited CSV
-     volume_base = "/Volumes/your_catalog/your_schema/dashboard_migration"
-     approved_path = f"{volume_base}/dashboard_inventory_approved/inventory.csv"
-     
-     # Read your edited CSV content
-     with open('path/to/edited/inventory.csv', 'r') as f:
-         csv_content = f.read()
-     
-     dbutils.fs.put(approved_path, csv_content, overwrite=True)
-     print(f"✅ Uploaded to: {approved_path}")
-     ```
+2. **Update configuration** (Cell 1):
+   - Verify the `volume_base` path matches your environment
+   - Edit if needed
 
-4. **Verify** upload succeeded:
-   ```python
-   df = spark.read.csv(approved_path, header=True, inferSchema=True)
-   print(f"✅ Approved: {df.count()} dashboards")
-   display(df)
-   ```
-
-## Option B: Interactive Helper Notebook
-
-1. **Open** the helper notebook in Databricks UI:
-   `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
-
-2. **Run cells** to review and filter:
-   - Cell 1: Configuration (auto-detects UI/CLI mode)
+3. **Run cells to review and filter:**
+   - Cell 1: Configuration
    - Cells 2-4: View stats and identify issues
    - Cell 5: Customize filters (remove failed lookups, inactive dashboards, etc.)
    - Cell 6: Review approved list
 
-3. **Upload** with confirmation:
+4. **Upload with confirmation:**
    - Cell 7: Type `CONFIRM` to upload approved inventory
    - Cell 8: Verify upload succeeded
 
-**Benefits:**
-- Interactive filtering with live dashboard counts
-- Built-in issue detection (failed lookups, inactive dashboards, zero tables)
-- Automatic upload with confirmation
-- Immediate verification
+**Why this step is required:**
+- Manual review prevents migration of problematic dashboards
+- Explicit confirmation ensures intentional approval
+- Cannot be automated to enforce quality control
 
-See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed step-by-step instructions for both options.
+See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed step-by-step instructions.
 
 ---
 
-**Step 2: Export & Transform**
+**Step 3: Export & Transform**
 
 **Prerequisites:**
-- ✅ Step 1 completed
-- ✅ Approved CSV uploaded to `dashboard_inventory_approved/inventory.csv`
+- ✅ Step 1 completed (inventory generated)
+- ✅ Step 2 completed (inventory reviewed and approved)
+- ✅ Approved CSV exists at `dashboard_inventory_approved/inventory.csv`
 
 **Run:**
 ```bash
@@ -188,14 +162,14 @@ See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed step-by-step instructions fo
 databricks bundle run export_transform -t dev
 ```
 
-**What Step 2 does:**
+**What Step 3 does:**
 - Verifies approved inventory exists and checks file age
 - Fails with clear error if approved CSV is missing
 - Exports only the approved dashboards
 - Applies transformations (if enabled)
 - Captures permissions
 
-**Step 3: Generate & Deploy** (Final step)
+**Step 4: Generate & Deploy** (Final step)
 ```bash
 # Generate asset bundle and deploy to target
 databricks bundle run generate_deploy -t dev

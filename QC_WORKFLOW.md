@@ -1,48 +1,33 @@
 # QC Workflow Guide
 
-This guide explains the Quality Control (QC) workflow for dashboard migration with separate inventory approval stage.
+This guide explains the Quality Control (QC) workflow for dashboard migration with mandatory inventory approval stage.
 
 ---
 
 ## Workflow Overview
 
 ```
-Step 1: Inventory Generation
+Step 1: Inventory Generation (Automated)
     ↓
-    Creates volume (if not exists)
-    Creates dashboard_inventory/ with inventory.csv
-    Creates dashboard_inventory_approved/ (empty)
+    Creates volume and directories
+    Saves dashboard_inventory/inventory.csv
     ↓
-Step 1a: Review & Approve (MANUAL - Choose Option)
+Step 2: Review & Approve (REQUIRED MANUAL STEP - UI Only)
     ↓
-    ┌──────────────────┬──────────────────────┐
-    │   Option A       │    Option B          │
-    │   Manual CSV     │    Helper Notebook   │
-    │   Edit           │    Interactive       │
-    └──────────────────┴──────────────────────┘
-    │                  │                      │
-    Download CSV       Open Bundle_00a        
-    Edit in Excel      View stats & issues    
-    Upload to          Apply filters          
-    approved/          Upload with CONFIRM    
-    │                  │                      │
-    └──────────────────┴──────────────────────┘
-                       ↓
-    dashboard_inventory_approved/inventory.csv uploaded
-                       ↓
-Step 2: Export & Transform
+    Load inventory → View stats → Apply filters → Type CONFIRM → Upload
     ↓
-    Verifies approved CSV exists & is recent
-    Exports approved dashboards only
+    Saves dashboard_inventory_approved/inventory.csv
     ↓
-Step 3: Generate & Deploy
+Step 3: Export & Transform (Automated)
+    ↓
+    Verifies approved CSV → Exports dashboards
+    ↓
+Step 4: Generate & Deploy (Automated)
 ```
 
 ---
 
-## 📋 Step-by-Step Instructions
-
-### Step 1: Generate Initial Inventory
+## Step 1: Generate Inventory
 
 ```bash
 databricks bundle run inventory_generation -t dev --profile e2-field-engg
@@ -57,218 +42,169 @@ databricks bundle run inventory_generation -t dev --profile e2-field-engg
 
 **Output:**
 - `dashboard_inventory/inventory.csv` (raw inventory)
-- `dashboard_inventory_approved/` (empty, ready for manual upload)
+- `dashboard_inventory_approved/` (empty, ready for Step 2)
 
 ---
 
-### Step 1a: Review & Approve Inventory (CHOOSE ONE OPTION)
+## Step 2: Review & Approve (REQUIRED)
 
-## Option A: Manual CSV Editing
+**Important:** This step MUST be completed in Databricks UI. It cannot be run via CLI or automated.
 
-**Best for:** Users who prefer Excel/text editor workflow
+### Prerequisites
+- Step 1 completed
+- Databricks UI access
+- Cluster running
 
-### Steps:
+### Instructions
 
-**1. Download the inventory CSV**
-
-Via Databricks UI:
-- Navigate to **Catalog Explorer**
-- Browse to your volume → `dashboard_inventory/`
-- Download `inventory.csv`
-
-Via code:
-```python
-volume_base = "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
-df = spark.read.csv(f"{volume_base}/dashboard_inventory/inventory.csv", header=True, inferSchema=True)
-
-# Display to review
-display(df)
-
-# Or export to local
-df.toPandas().to_csv("local_inventory.csv", index=False)
-```
-
-**2. Edit the CSV file**
-
-- Open in Excel or text editor
-- Identify dashboards to exclude:
-  - Dashboards with names like `Dashboard_<id>` (failed API lookups)
-  - Inactive dashboards
-  - Dashboards with `table_count = 0`
-- **Delete entire rows** for unwanted dashboards
-- Save your changes
-
-**3. Upload to approved location**
-
-Via Databricks UI:
-- Navigate to **Catalog Explorer**
-- Browse to your volume → `dashboard_inventory_approved/`
-- Click **Upload**
-- Select your edited CSV
-- Name it: `inventory.csv`
-
-Via code:
-```python
-# Read your edited CSV
-with open("edited_inventory.csv", "r") as f:
-    csv_content = f.read()
-
-# Upload
-volume_base = "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
-approved_path = f"{volume_base}/dashboard_inventory_approved/inventory.csv"
-dbutils.fs.put(approved_path, csv_content, overwrite=True)
-
-print(f"✅ Uploaded to: {approved_path}")
-```
-
-**4. Verify upload**
-
-```python
-volume_base = "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
-approved_path = f"{volume_base}/dashboard_inventory_approved/inventory.csv"
-
-df = spark.read.csv(approved_path, header=True, inferSchema=True)
-print(f"✅ Approved: {df.count()} dashboards")
-display(df)
-```
-
----
-
-## Option B: Interactive Helper Notebook
-
-**Best for:** Users who prefer interactive filtering in Databricks
-
-### Steps:
-
-**1. Open the helper notebook**
+#### 1. Open the Notebook
 
 In Databricks UI, navigate to:
 ```
 Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb
 ```
 
-**2. Run Cell 1: Configuration**
+#### 2. Update Configuration (Cell 1)
 
-The notebook auto-detects UI vs CLI mode:
-- **UI Mode**: Uses default volume path (update if needed)
-- **CLI Mode**: Uses parameters from job
+Verify the volume path is correct:
+```python
+volume_base = "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
+```
 
-**3. Run Cells 2-4: Review Inventory**
+If your path is different, edit Cell 1 and update `volume_base`.
 
-- **Cell 2**: Load inventory and see summary stats
+#### 3. Load and Review Inventory (Cells 2-4)
+
+**Cell 2: Load Inventory**
+- Loads `dashboard_inventory/inventory.csv`
+- Shows summary statistics:
   - Total dashboards
   - Activity level distribution
   - Complexity distribution
   - Table usage stats
 
-- **Cell 3**: View full inventory sorted by table count
+**Cell 3: View Full Inventory**
+- Displays all dashboards sorted by table count
+- Scroll through to spot-check
 
-- **Cell 4**: Identify potential issues
-  - Dashboards with fallback names (failed API lookups)
-  - Inactive dashboards
-  - Dashboards with zero tables
+**Cell 4: Identify Issues**
+- **Fallback Names**: Dashboards named `Dashboard_<id>` (failed API lookups)
+  - Recommendation: EXCLUDE from migration
+- **Inactive Dashboards**: No recent usage
+  - Consider excluding if unused
+- **Zero Tables**: Dashboards with no table references
+  - May be text-only or have issues
 
-**4. Run Cell 5: Apply Filters**
+#### 4. Apply Filters (Cell 5)
 
-Customize the filtering logic:
+Customize the filtering logic. Default filters:
 
 ```python
-# Example filters (uncomment/modify as needed)
-
-# Filter 1: Remove failed API lookups (RECOMMENDED)
+# Filter 1: Remove fallback names (enabled by default)
 df_approved = df.filter(~df.dashboard_name.startswith('Dashboard_'))
 
-# Filter 2: Only dashboards with tables
+# Filter 2: Require tables (enabled by default)
 df_approved = df_approved.filter(df_approved.table_count > 0)
+```
 
+**Optional filters** (uncomment to enable):
+
+```python
 # Filter 3: Only active dashboards
+# df_approved = df_approved.filter(df_approved.activity_level != 'Inactive')
+
+# Filter 4: Minimum activity level
 # df_approved = df_approved.filter(df_approved.activity_level.isin(['Very Active', 'Active']))
 
-# Filter 4: Custom dashboard IDs
+# Filter 5: Custom dashboard IDs
 # approved_ids = ['id1', 'id2', 'id3']
 # df_approved = df_approved.filter(df_approved.dashboard_id.isin(approved_ids))
 ```
 
-**5. Run Cell 6: Review Approved List**
+**Tip:** Start with the default filters (1-2), then customize based on your needs.
 
-- View approved inventory
-- See summary statistics
-- Verify counts look correct
+#### 5. Review Approved List (Cell 6)
 
-**6. Run Cell 7: Upload with Confirmation**
+- View the filtered inventory
+- Check dashboard counts match your expectations
+- Verify no critical dashboards were filtered out
+- Review summary statistics
 
-- **UI Mode**: Type `CONFIRM` to upload
-- **CLI Mode**: Auto-uploads
+#### 6. Upload with Confirmation (Cell 7)
 
-The cell will:
-- Show dashboard count and size
-- Require explicit confirmation in UI mode
-- Upload to `dashboard_inventory_approved/inventory.csv`
+**This is the critical step with safety checks:**
 
-**7. Run Cell 8: Verify Upload**
+1. Cell 7 checks if a file already exists in `dashboard_inventory_approved/`
+2. If exists, you'll see:
+   ```
+   ⚠️  WARNING: EXISTING FILE WILL BE OVERWRITTEN
+   
+   📋 Current approved inventory: 15 dashboards
+   📋 New filtered inventory: 10 dashboards
+   
+   If you have manually uploaded a file to dashboard_inventory_approved/,
+   it will be REPLACED with the results from Cell 5-6 filters.
+   
+   Typing CONFIRM means you ACCEPT this new filtered inventory
+   and discard any previously uploaded file.
+   ```
+
+3. Type `CONFIRM` (uppercase, exact spelling) to proceed
+4. Any other text will cancel the upload
+
+**Example:**
+```
+⚠️  Type 'CONFIRM' to accept and upload this filtered inventory: CONFIRM
+
+✅ UPLOADED SUCCESSFULLY
+📁 Location: /Volumes/.../dashboard_inventory_approved/inventory.csv
+📊 Dashboards: 10
+```
+
+#### 7. Verify Upload (Cell 8)
 
 Confirms:
 - File exists at correct location
 - Dashboard count matches
 - Shows file modification timestamp
-- Ready for Step 2
+- Confirms ready for Step 3
 
----
+**Example output:**
+```
+======================================================================
+✅ VERIFICATION SUCCESSFUL
+======================================================================
+📁 Location: /Volumes/.../dashboard_inventory_approved/inventory.csv
+📊 Dashboards: 10
+📅 Modified: 2026-01-30 14:23:45
+💾 Size: 12.3 KB
+======================================================================
 
-## Comparison: Option A vs Option B
-
-| Aspect | Option A (Manual CSV) | Option B (Helper Notebook) |
-|--------|----------------------|----------------------------|
-| **Best for** | Excel power users | SQL/Python users |
-| **Learning curve** | Low | Medium |
-| **Flexibility** | Very high (any tool) | High (code-based) |
-| **Speed** | Fast for small edits | Fast for filters |
-| **Automation** | Manual | Semi-automated |
-| **Issue detection** | Manual | Automatic |
-| **Confirmation** | Manual verify | Built-in verify |
-| **Audit trail** | File-based | Code-based |
-
----
-
-### Step 1b: Verification (Both Options)
-
-After using either option, verify the approved inventory is ready:
-
-```python
-volume_base = "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
-approved_path = f"{volume_base}/dashboard_inventory_approved/inventory.csv"
-
-# Verify file exists
-try:
-    df = spark.read.csv(approved_path, header=True, inferSchema=True)
-    
-    # Check file metadata
-    file_info = dbutils.fs.ls(f"{volume_base}/dashboard_inventory_approved/")
-    for file in file_info:
-        if file.name == 'inventory.csv':
-            from datetime import datetime
-            modified = datetime.fromtimestamp(file.modificationTime / 1000)
-            print(f"✅ Approved inventory ready")
-            print(f"   Location: {approved_path}")
-            print(f"   Dashboards: {df.count()}")
-            print(f"   Modified: {modified.strftime('%Y-%m-%d %H:%M:%S')}")
-            print(f"   Size: {file.size / 1024:.1f} KB")
-            break
-except Exception as e:
-    print(f"❌ Verification failed: {e}")
-    print("   Make sure you completed Step 1a (Option A or B)")
+🎯 READY FOR STEP 3
+   Run: databricks bundle run export_transform -t dev
+======================================================================
 ```
 
 ---
 
-## Step 2: Export & Transform
+### Why This Step is Manual
+
+- **Requires human judgment** to identify problematic dashboards
+- **Prevents accidental migration** of deleted/broken dashboards
+- **Provides audit trail** with explicit CONFIRM action
+- **Allows customization** of filters based on business needs
+- **Enforces quality control** - cannot be skipped or automated
+
+---
+
+## Step 3: Export & Transform
 
 **Prerequisites:**
 - ✅ Step 1 completed (inventory generated)
-- ✅ Step 1a completed (Option A or B)
+- ✅ Step 2 completed (inventory reviewed and approved)
 - ✅ Approved CSV exists at `dashboard_inventory_approved/inventory.csv`
 
-**Run Step 2:**
+**Run Step 3:**
 ```bash
 # Deploy bundle (if not already done)
 databricks bundle deploy -t dev --profile e2-field-engg
@@ -277,7 +213,7 @@ databricks bundle deploy -t dev --profile e2-field-engg
 databricks bundle run export_transform -t dev --profile e2-field-engg
 ```
 
-**What Step 2 does:**
+**What Step 3 does:**
 1. **Verifies** approved inventory exists and is recent
    - Checks file modification date
    - Warns if file is older than 7 days
@@ -287,23 +223,23 @@ databricks bundle run export_transform -t dev --profile e2-field-engg
 4. **Captures** permissions
 
 **Error handling:**
+
 If approved CSV is missing, you'll see:
 ```
 ❌ ERROR: APPROVED INVENTORY NOT FOUND
 Expected location: /Volumes/.../dashboard_inventory_approved/inventory.csv
 
 🎯 REQUIRED ACTIONS:
-   1. Run Step 1 if you haven't
-   2. Then either:
-      Option A: Manually edit and upload CSV
-      Option B: Run helper notebook
+   1. Run Step 1: databricks bundle run inventory_generation -t dev
+   2. Run Step 2: Open Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb
+              in Databricks UI and complete the review process
 ```
 
 ---
 
-## 🎯 Common Filtering Scenarios
+## Common Filtering Scenarios
 
-### Scenario 1: Remove Failed API Lookups
+### Scenario 1: Remove Failed API Lookups (Default)
 ```python
 df_approved = df.filter(~df.dashboard_name.startswith('Dashboard_'))
 ```
@@ -332,25 +268,7 @@ df_approved = df.filter(df.dashboard_id.isin(approved_ids))
 
 ---
 
-## 🔧 Configuration Details
-
-### databricks.yml Settings
-
-**Step 1 Output:**
-```yaml
-inventory_path: dashboard_inventory  # Where Step 1 writes
-```
-
-**Step 2 Input:**
-```yaml
-inventory_path: dashboard_inventory_approved  # Where Step 2 reads from
-```
-
-This separation allows QC review between steps!
-
----
-
-## 📊 Inventory Fields Reference
+## Inventory Fields Reference
 
 | Field | Description |
 |-------|-------------|
@@ -367,33 +285,31 @@ This separation allows QC review between steps!
 
 ---
 
-## ✅ Best Practices
+## Troubleshooting
 
-1. **Always Review First**: Don't blindly approve all dashboards
-2. **Check Failed Lookups**: Dashboards with `Dashboard_<id>` names likely don't exist
-3. **Consider Activity**: Inactive dashboards may not need migration
-4. **Test with Small Set**: For first migration, approve 2-3 dashboards only
-5. **Document Decisions**: Keep notes on why dashboards were excluded
-6. **Backup Original**: The original inventory.csv is preserved for reference
+### Issue: "CONFIRM didn't work"
+**Solution**: Make sure you typed `CONFIRM` in all uppercase, exact spelling
 
----
+### Issue: "Upload cancelled accidentally"
+**Solution**: Re-run Cell 7 and type CONFIRM again. No harm done.
 
-## 🚨 Troubleshooting
-
-### Issue: "No dashboards in approved inventory"
-**Solution**: Check your filters in Cell 5 - they may be too restrictive
-
-### Issue: "Step 2 still reads from dashboard_inventory"
+### Issue: "Step 3 says approved inventory not found"
 **Solution**: 
-1. Verify `databricks.yml` line ~100 has `inventory_path: ${var.inventory_approved_path}`
-2. Redeploy: `databricks bundle deploy -t dev`
+1. Verify Cell 8 showed "VERIFICATION SUCCESSFUL"
+2. Check the file exists: `dbutils.fs.ls(f"{volume_base}/dashboard_inventory_approved/")`
+3. If missing, re-run Cell 7 in Step 2
 
-### Issue: "Approved CSV not found"
-**Solution**: Make sure you ran Cell 7 in the review notebook
+### Issue: "Wrong dashboards in approved inventory"
+**Solution**: 
+1. Go back to Step 2, Cell 5
+2. Adjust your filters
+3. Run Cells 5-8 again
+4. The new upload will replace the old one
 
 ---
 
 **Last Updated**: 2026-01-30  
 **Related Files**: 
-- `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb` (Review notebook)
+- `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb` (Step 2 notebook)
 - `databricks.yml` (Configuration)
+- `README.md` (Quick start guide)
