@@ -101,11 +101,10 @@ data_security_mode: USER_ISOLATION
 
 ### Important Notes
 
-- ✅ **Always use 17.3 LTS** (or latest LTS) going forward
-- ❌ **Never use 14.3.x** - outdated, lacks latest features
-- 🔧 Serverless requires `num_workers: 0`
-- 📦 Standard clusters need explicit `num_workers` (1+)
-- 🎯 All configs in `databricks.yml` lines 48-142
+- Always use 17.3 LTS (or latest LTS)
+- Serverless requires `num_workers: 0`
+- Standard clusters need explicit `num_workers` (1+)
+- All configs in `databricks.yml` lines 48-142
 
 ---
 
