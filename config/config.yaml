@@ -107,7 +107,7 @@ dashboard_selection:
   # Primary method to use for dashboard discovery
   # Options: "catalog_filter", "folder_path", "explicit_ids", "inventory_csv"
   # Only ONE method is active at a time (specified here)
-  method: "catalog_filter"
+  method: "folder_path"
   
   # ──────────────────────────────────────────────────────────────────────────
   # OPTION 1: inventory_csv - Load from pre-generated CSV file
@@ -131,8 +131,8 @@ dashboard_selection:
   # OPTION 3: folder_path - Discover by workspace folder location
   # ──────────────────────────────────────────────────────────────────────────
   folder_path:
-    enabled: false  # Can be used if method="folder_path"
-    path: "/Workspace/Shared/Dashboards"  # Workspace folder to scan
+    enabled: true  # CURRENTLY ACTIVE (matches method="folder_path" above)
+    path: "/Workspace/Users/archana.krishnamurthy@databricks.com/01-Customer-Projects/Vizient/Dashboard-Migration/Simulate Dashboards"  # Workspace folder to scan
     # Use case: When you want to migrate based on folder organization
     # Benefit: Preserves workspace folder structure context
     # Note: Scans recursively for all dashboards under this path
@@ -141,7 +141,7 @@ dashboard_selection:
   # OPTION 4: catalog_filter - Discover by data catalog usage (RECOMMENDED)
   # ──────────────────────────────────────────────────────────────────────────
   catalog_filter:
-    enabled: true  # CURRENTLY ACTIVE (matches method="catalog_filter" above)
+    enabled: false  # Can be used if method="catalog_filter"
     catalog: "archana_krish_fe_dsa"  # Find dashboards querying this catalog
     use_system_tables: true  # Use system.access.table_lineage for 10x faster discovery
     # Use case: Migrate dashboards using specific catalog (most common scenario)
