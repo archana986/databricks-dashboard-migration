@@ -1,116 +1,229 @@
 # Databricks Dashboard Migration Configuration
-# Update with your actual values
+# Update with your actual workspace URLs, catalogs, and settings
 
+# Config file version for compatibility tracking
 version: "1.0"
 
 # ============================================================================
 # SOURCE WORKSPACE (where dashboards currently exist)
 # ============================================================================
 source:
+  # Full URL of your source Databricks workspace
+  # Format: https://<workspace-name>.cloud.databricks.com
   workspace_url: "https://e2-demo-field-eng.cloud.databricks.com"
   
   auth:
-    method: "oauth"  # Options: "pat", "oauth", "service_principal"
+    # Authentication method for source workspace
+    # Options:
+    #   "oauth"   - Uses notebook's built-in auth (recommended, no tokens needed)
+    #   "pat"     - Personal Access Token from Databricks secrets
+    #   "service_principal" - Service principal credentials for automation
+    method: "oauth"
     
-    # PAT Token (currently using)
+    # PAT Authentication (if method="pat")
+    # Uncomment and configure if using PAT instead of OAuth
     # pat:
-    #   secret_scope: "migration"
-    #   secret_key: "source-token"
+    #   secret_scope: "migration"          # Databricks secret scope name
+    #   secret_key: "source-token"         # Secret key for source PAT
+    #   # Token retrieved via: dbutils.secrets.get(scope="migration", key="source-token")
     
-    # OAuth (recommended - uncomment to use)
-    # method: "oauth"
-    # Note: OAuth uses notebook's built-in authentication
-    # No additional configuration needed when running in notebook
+    # OAuth Authentication (if method="oauth") - RECOMMENDED
+    # No additional configuration needed
+    # Automatically uses your notebook's built-in Databricks authentication
+    # Benefits: No token management, inherits your permissions, more secure
 
 # ============================================================================
-# TARGET WORKSPACE (where dashboards will be migrated)
+# TARGET WORKSPACE (where dashboards will be migrated to)
 # ============================================================================
 target:
+  # Full URL of your target Databricks workspace
+  # This is where migrated dashboards will be imported
   workspace_url: "https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com"
   
   auth:
-    method: "oauth"  # Options: "pat", "oauth", "service_principal"
+    # Authentication method for target workspace
+    # Should match source method for simplicity, but can be different
+    method: "oauth"
     
-    # PAT Token (currently using)
+    # PAT Authentication (if method="pat")
+    # Uncomment and configure if using PAT
     # pat:
-    #   secret_scope: "migration"
-    #   secret_key: "target-token"
+    #   secret_scope: "migration"          # Databricks secret scope name
+    #   secret_key: "target-token"         # Secret key for target PAT
     
-    # OAuth (recommended - uncomment to use)
-    # method: "oauth"
-    # Note: OAuth uses notebook's built-in authentication
-    # No additional configuration needed when running in notebook
+    # OAuth Authentication (if method="oauth") - RECOMMENDED
+    # No configuration needed - uses notebook's built-in auth
+    # Note: You must have appropriate permissions in target workspace
 
 # ============================================================================
 # VOLUME PATHS (Unity Catalog Volumes - serverless compatible)
 # ============================================================================
 paths:
+  # Root volume path for ALL migration artifacts
+  # Format: /Volumes/<catalog>/<schema>/<volume>
+  # Why volumes: Serverless-compatible, better than DBFS, supports large files
   volume_base: "/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration"
   
-  # Subdirectories (relative to volume_base)
+  # Subdirectories (relative to volume_base) - automatically created if needed
+  
+  # Where dashboard inventory CSVs are stored
+  # Contains: inventory.csv with dashboard metadata (ID, name, published status, etc.)
   inventory: "dashboard_inventory"
+  
+  # Where exported .lvdash.json files and permissions are saved
+  # Contains: Raw dashboard JSONs BEFORE transformation
   exported: "exported"
+  
+  # Where transformed .lvdash.json files are saved
+  # Contains: Modified dashboard JSONs AFTER catalog/schema remapping
   transformed: "transformed"
+  
+  # Where Databricks Asset Bundle files are generated
+  # Contains: databricks.yml, resources/, dashboard files for bundle deployment
   bundles: "bundles"
+  
+  # Where CSV mapping files are stored
+  # Contains: catalog_schema_mapping.csv for transformations
   mappings: "mappings"
+  
+  # Where migration execution logs are written
+  # Contains: Execution logs, error logs, audit trails
   logs: "logs"
   
-  # CSV mapping file
+  # Specific CSV file with catalog/schema/table/volume mappings
+  # Format: old_catalog,old_schema,old_table,new_catalog,new_schema,new_table
+  # Used by transformation logic to rewrite dashboard queries
   mapping_csv: "mappings/catalog_schema_mapping.csv"
   
-  # Target import location
+  # Target workspace folder where dashboards will be imported
+  # Format: /Shared/<folder_name> or /Users/<email>/<folder_name>
+  # Result: Dashboards appear at this path in target workspace
   target_parent_path: "/Shared/Migrated_Dashboards"
 
 # ============================================================================
-# DASHBOARD SELECTION
+# DASHBOARD SELECTION - How to discover dashboards for migration
 # ============================================================================
 dashboard_selection:
+  # Primary method to use for dashboard discovery
+  # Options: "catalog_filter", "folder_path", "explicit_ids", "inventory_csv"
+  # Only ONE method is active at a time (specified here)
   method: "catalog_filter"
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # OPTION 1: inventory_csv - Load from pre-generated CSV file
+  # ──────────────────────────────────────────────────────────────────────────
   inventory_csv:
-    enabled: false
-    csv_path: "dashboard_inventory/dashboard_inventory.csv"
+    enabled: true  # Can be used if method="inventory_csv"
+    csv_path: "dashboard_inventory/dashboard_inventory.csv"  # Relative to volume_base
+    # Use case: When you've already generated an inventory and want to use that list
+    # Benefit: Repeatable migrations with exact same dashboard set
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # OPTION 2: explicit_ids - Manually specify dashboard IDs
+  # ──────────────────────────────────────────────────────────────────────────
   explicit_ids:
-    enabled: false
-    dashboard_ids: []
+    enabled: false  # Can be used if method="explicit_ids"
+    dashboard_ids: []  # List of dashboard IDs: ["01f0fb1a...", "01efeeea..."]
+    # Use case: Cherry-pick specific dashboards for testing or selective migration
+    # Benefit: Full control over exactly which dashboards to migrate
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # OPTION 3: folder_path - Discover by workspace folder location
+  # ──────────────────────────────────────────────────────────────────────────
   folder_path:
-    enabled: false
-    path: "/Workspace/Shared/Dashboards"
+    enabled: false  # Can be used if method="folder_path"
+    path: "/Workspace/Shared/Dashboards"  # Workspace folder to scan
+    # Use case: When you want to migrate based on folder organization
+    # Benefit: Preserves workspace folder structure context
+    # Note: Scans recursively for all dashboards under this path
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # OPTION 4: catalog_filter - Discover by data catalog usage (RECOMMENDED)
+  # ──────────────────────────────────────────────────────────────────────────
   catalog_filter:
-    enabled: true
-    catalog: "archana_krish_fe_dsa"
-    use_system_tables: true
+    enabled: true  # CURRENTLY ACTIVE (matches method="catalog_filter" above)
+    catalog: "archana_krish_fe_dsa"  # Find dashboards querying this catalog
+    use_system_tables: true  # Use system.access.table_lineage for 10x faster discovery
+    # Use case: Migrate dashboards using specific catalog (most common scenario)
+    # Benefit: Fastest method, automatically finds all relevant dashboards
+    # How it works: Queries system tables or scans published dashboard definitions
+    # Note: Only includes dashboards that actually query the specified catalog
 
 # ============================================================================
-# TRANSFORMATION OPTIONS
+# TRANSFORMATION OPTIONS - Rewrite catalog/schema/table references
 # ============================================================================
 transformation:
+  # Whether to apply catalog/schema/table name transformations
+  # If true: Dashboard JSONs are modified to use new catalog/schema names
+  # If false: Dashboards are migrated as-is (no changes to data references)
   enabled: true
+  
+  # CSV file with old→new mappings
+  # Format: old_catalog,old_schema,old_table,new_catalog,new_schema,new_table
+  # Example row: prod_data,sales,orders,dev_data,sales_test,orders
+  # Wildcard support: Use "*" for table to remap entire schema
   mapping_csv: "mappings/catalog_schema_mapping.csv"
 
 # ============================================================================
-# PERMISSIONS OPTIONS
+# PERMISSIONS OPTIONS - Access Control List (ACL) management
 # ============================================================================
 permissions:
+  # Whether to export permissions (ACLs) from source dashboards
+  # If true: Saves <dashboard>_permissions.json files with user/group access
   capture: true
+  
+  # Whether to apply captured permissions to target dashboards after import
+  # If true: Attempts to set same permissions in target workspace
+  # Requirement: Principals (users/groups) must exist in target workspace
   apply_after_import: true
+  
+  # How to match principals between source and target workspaces
+  # Options:
+  #   "name" - Match by email address or group name (recommended)
+  #   "id"   - Match by principal ID (less common, for account-level groups)
   match_by: "name"
-  dry_run: true
+  
+  # Dry run mode - SAFE FOR TESTING
+  # If true: Simulates permission application WITHOUT actually applying them
+  # If false: Actually applies permissions to target dashboards
+  # Recommendation: Keep true for initial testing, set false for production
+  dry_run: true  # ← CHANGE TO false TO ACTUALLY APPLY PERMISSIONS
 
 # ============================================================================
-# WAREHOUSE CONFIGURATION (for target workspace)
+# WAREHOUSE CONFIGURATION (for target workspace dashboards)
 # ============================================================================
 warehouse:
+  # Whether to look up warehouse by name (vs using warehouse ID)
+  # Why true: Warehouse IDs differ between workspaces; names are consistent
+  # If false: Must provide warehouse_id instead
   use_name_lookup: true
+  
+  # Name of SQL warehouse to use for dashboards in target workspace
+  # Requirement: This warehouse must exist in target workspace
+  # Used for: Dashboard query execution in target
   warehouse_name: "ak-migration"
+  
+  # Alternative: If use_name_lookup=false, provide ID
+  # warehouse_id: "abc123def456"  # Uncomment and set if not using name lookup
 
 # ============================================================================
-# BUNDLE OPTIONS (if using bundle deployment)
+# BUNDLE OPTIONS (if using Databricks Asset Bundle deployment)
 # ============================================================================
 bundle:
+  # Name of the Databricks Asset Bundle
+  # Used in: databricks.yml bundle definition
+  # Convention: Use lowercase with underscores
   name: "dashboard_migration"
-  embed_credentials: false
+  
+  # Whether to embed deployment credentials for dashboard execution
+  # If true: Dashboards run with bundle deployer's credentials (service account)
+  # If false: Dashboards run with each viewer's credentials
+  # Use case: Set true when viewers shouldn't need direct data access
+  embed_credentials: true
+  
+  # Bundle deployment mode/environment
+  # Options:
+  #   "development" - Dev environment, allows overwrites, less strict
+  #   "production"  - Prod environment, stricter validation, immutable
+  # Recommendation: Use "development" for testing, "production" for final deployment
   mode: "development"
