@@ -36,7 +36,7 @@ Users needed clear guidance on cluster setup. Previous config was misleading (cl
 
 ---
 
-### 2026-01-28 - Remove Warning Language (commit: pending)
+### 2026-01-28 - Remove Warning Language (commit: 5917d93)
 
 **Component:** `Bundle/README.md`
 
@@ -47,6 +47,21 @@ Users needed clear guidance on cluster setup. Previous config was misleading (cl
 
 **Rationale:**
 Instructions should be factual, not include warnings. Keep documentation professional.
+
+---
+
+### 2026-01-28 - Create plan.md for Documentation Tracking (commit: 5917d93)
+
+**Component:** `plan.md` (new file)
+
+**Changes Made:**
+- Created centralized plan.md file to track all instruction/documentation changes
+- Established workflow: pending → completed with commit hash
+- Organized by change categories (README, configs, notebooks, etc.)
+- Will be referenced for all future documentation updates
+
+**Rationale:**
+Systematic approach to track documentation changes separately from code changes.
 
 ---
 
