@@ -2,7 +2,7 @@
 Unity Catalog Volume file operations.
 """
 
-from typing import List
+from typing import List, Dict
 from pathlib import Path
 import fnmatch
 
