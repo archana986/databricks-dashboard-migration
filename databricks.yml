@@ -39,21 +39,17 @@ resources:
               volume_base: ${var.volume_base}
               audit_lookback_days: ${var.audit_lookback_days}
           
-          # TRUE SERVERLESS COMPUTE (Recommended)
+          # TRUE SERVERLESS COMPUTE
+          # No cluster definition - uses Databricks serverless by default
+          # Benefits:
           # - Faster startup (no cluster provisioning)
           # - Auto-scaling based on workload
           # - No cluster management needed
           # - Ideal for SQL-heavy workloads (system table queries)
-          new_cluster:
-            spark_version: "17.3.x-scala2.12"  # Latest LTS (includes Apache Spark 3.5.4)
-            num_workers: 0  # 0 = Serverless (auto-scaling)
-            data_security_mode: SINGLE_USER
-            custom_tags:
-              ResourceClass: "Serverless"
           
-          # ALTERNATIVE: 17.3 LTS with Photon (Uncomment if serverless not available)
+          # ALTERNATIVE: Standard cluster with Photon (Uncomment if serverless not working)
           # new_cluster:
-          #   spark_version: "17.3.x-scala2.12"  # 17.3 LTS (includes Apache Spark 3.5.4, Scala 2.12)
+          #   spark_version: "17.3.x-scala2.12"  # Recommended: Latest LTS
           #   node_type_id: "i3.xlarge"
           #   num_workers: 2
           #   runtime_engine: PHOTON
