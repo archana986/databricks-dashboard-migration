@@ -49,8 +49,12 @@ variables:
   # PATHS (relative to volume_base)
   # ──────────────────────────────────────────────────────────────────────────
   inventory_path:
-    description: Subdirectory for inventory CSV files
+    description: Subdirectory for inventory CSV files (Step 1 output)
     default: dashboard_inventory
+  
+  inventory_approved_path:
+    description: Subdirectory for QC-approved inventory CSV (Step 2 input)
+    default: dashboard_inventory_approved
   
   exported_path:
     description: Subdirectory for exported dashboard JSONs
@@ -171,7 +175,7 @@ resources:
     # ========================================================================
     export_transform:
       name: "[Migration] 02 - Export & Transform"
-      description: "Export and transform dashboards based on inventory CSV"
+      description: "Export and transform dashboards based on QC-approved inventory CSV"
       
       tasks:
         - task_key: export_and_transform
@@ -183,8 +187,8 @@ resources:
               volume_base: ${var.volume_base}
               source_workspace_url: ${var.source_workspace_url}
               target_workspace_url: ${var.target_workspace_url}
-              # Paths
-              inventory_path: ${var.inventory_path}
+              # Paths - NOTE: Uses inventory_approved_path for QC workflow
+              inventory_path: ${var.inventory_approved_path}
               exported_path: ${var.exported_path}
               transformed_path: ${var.transformed_path}
               mappings_path: ${var.mappings_path}

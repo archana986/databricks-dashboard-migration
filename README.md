@@ -107,7 +107,27 @@ databricks bundle run inventory_generation -t dev
 databricks jobs list-runs --limit 1
 ```
 
-**Step 2: Export & Transform** (After inventory review)
+**Step 1a: Review & Approve Inventory** (QC Gate)
+
+Open the review notebook in Databricks UI:
+- Navigate to `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
+- Run cells to review inventory statistics
+- Customize filtering in Cell 5 (remove failed lookups, inactive dashboards, etc.)
+- Run Cell 7 to save approved inventory
+
+**OR** use quick SQL/Python:
+```python
+# Load and filter
+df = spark.read.csv("{volume_base}/dashboard_inventory/inventory.csv", header=True, inferSchema=True)
+df_approved = df.filter(~df.dashboard_name.startswith('Dashboard_'))  # Remove failed lookups
+
+# Save to approved location
+df_approved.toPandas().to_csv("{volume_base}/dashboard_inventory_approved/inventory.csv", index=False)
+```
+
+See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed instructions.
+
+**Step 2: Export & Transform** (Uses approved inventory)
 ```bash
 # Export dashboards and apply transformations
 databricks bundle run export_transform -t dev
