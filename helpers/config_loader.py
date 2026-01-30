@@ -2,6 +2,7 @@
 Configuration loader for migration workflow.
 """
 
+import os
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -33,43 +34,44 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
     global _config_cache
     
     if config_path is None:
-        # Try standard locations
-        possible_paths = [
-            "../config/config.yaml",
-            "./config/config.yaml",
-            "config/config.yaml",
-            "/Workspace/.../config/config.yaml"
-        ]
-        
-        for path in possible_paths:
+        # Dynamically locate config directory
+        try:
+            # In Databricks workspace/job context
             try:
-                # Try with dbutils first
-                try:
-                    dbutils.fs.head(path, 100)
-                    config_path = path
-                    break
-                except:
-                    # Try local file
+                notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+                bundle_parent = os.path.dirname(os.path.dirname(notebook_path))
+                config_path = f"/Workspace{bundle_parent}/config/config.yaml"
+            except:
+                # Fallback: try relative paths for local execution
+                possible_paths = [
+                    "../config/config.yaml",
+                    "./config/config.yaml",
+                    "config/config.yaml"
+                ]
+                for path in possible_paths:
                     if Path(path).exists():
                         config_path = path
                         break
-            except:
-                continue
+        except Exception as e:
+            pass
         
         if config_path is None:
             raise FileNotFoundError(
-                "config.yaml not found. Create one in config/ directory. "
-                "See config/config_example.yaml for template."
+                "config.yaml not found. Ensure config directory is synced in databricks.yml"
             )
     
     # Read config file
     try:
-        # Use dbutils if available (running in notebook)
-        try:
+        if config_path.startswith('/Workspace'):
+            # Workspace file - use standard Python open
+            with open(config_path, 'r') as f:
+                config = yaml.safe_load(f)
+        elif config_path.startswith('/Volumes') or config_path.startswith('dbfs:'):
+            # Volume or DBFS path - use dbutils
             content = dbutils.fs.head(config_path, 10485760)
             config = yaml.safe_load(content)
-        except:
-            # Fall back to standard file read
+        else:
+            # Local file path
             with open(config_path, 'r') as f:
                 config = yaml.safe_load(f)
     except Exception as e:
