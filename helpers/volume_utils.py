@@ -2,16 +2,10 @@
 Unity Catalog Volume file operations.
 """
 
+from .dbutils_helper import get_dbutils as _get_dbutils
 from typing import List, Dict
 from pathlib import Path
 import fnmatch
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
 def read_volume_file(file_path: str) -> str:
     """
@@ -23,7 +17,7 @@ def read_volume_file(file_path: str) -> str:
     Returns:
         File content as string
     """
-    return dbutils.fs.head(file_path, 10485760)  # 10MB limit
+    return _get_dbutils().fs.head(file_path, 10485760)  # 10MB limit
 
 def write_volume_file(file_path: str, content: str, overwrite: bool = True) -> None:
     """
@@ -34,7 +28,7 @@ def write_volume_file(file_path: str, content: str, overwrite: bool = True) -> N
         content: Content to write
         overwrite: Whether to overwrite existing file
     """
-    dbutils.fs.put(file_path, content, overwrite=overwrite)
+    _get_dbutils().fs.put(file_path, content, overwrite=overwrite)
 
 def list_volume_files(directory_path: str, pattern: str = "*") -> List[str]:
     """
@@ -48,7 +42,7 @@ def list_volume_files(directory_path: str, pattern: str = "*") -> List[str]:
         List of file paths
     """
     try:
-        files = dbutils.fs.ls(directory_path)
+        files = _get_dbutils().fs.ls(directory_path)
         matching_files = []
         
         for file_info in files:
@@ -72,10 +66,10 @@ def ensure_directory_exists(directory_path: str) -> bool:
         True if directory was created, False if already existed
     """
     try:
-        dbutils.fs.ls(directory_path)
+        _get_dbutils().fs.ls(directory_path)
         return False  # Already exists
     except:
-        dbutils.fs.mkdirs(directory_path)
+        _get_dbutils().fs.mkdirs(directory_path)
         return True  # Created
 
 def read_csv_from_volume(csv_path: str) -> List[Dict]:

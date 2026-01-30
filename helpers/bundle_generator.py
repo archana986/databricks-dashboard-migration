@@ -2,17 +2,11 @@
 Databricks Asset Bundle generation helpers.
 """
 
+from .dbutils_helper import get_dbutils as _get_dbutils
 import json
 import yaml
 from typing import Dict, List, Any
 from pathlib import Path
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
 def create_databricks_yml(
     bundle_name: str,
@@ -213,9 +207,9 @@ def generate_bundle_structure(
     
     # Use dbutils if available
     try:
-        dbutils.fs.mkdirs(bundle_path)
-        dbutils.fs.mkdirs(f"{bundle_path}/resources")
-        dbutils.fs.mkdirs(f"{bundle_path}/src/dashboards")
+        _get_dbutils().fs.mkdirs(bundle_path)
+        _get_dbutils().fs.mkdirs(f"{bundle_path}/resources")
+        _get_dbutils().fs.mkdirs(f"{bundle_path}/src/dashboards")
     except:
         os.makedirs(f"{bundle_path}/resources", exist_ok=True)
         os.makedirs(f"{bundle_path}/src/dashboards", exist_ok=True)
@@ -230,7 +224,7 @@ def generate_bundle_structure(
     
     # Write databricks.yml
     try:
-        dbutils.fs.put(f"{bundle_path}/databricks.yml", databricks_yml, overwrite=True)
+        _get_dbutils().fs.put(f"{bundle_path}/databricks.yml", databricks_yml, overwrite=True)
     except:
         with open(f"{bundle_path}/databricks.yml", 'w') as f:
             f.write(databricks_yml)
@@ -248,8 +242,8 @@ def generate_bundle_structure(
         
         try:
             # Copy using dbutils
-            content = dbutils.fs.head(src_json_path, 10485760)
-            dbutils.fs.put(dest_json_path, content, overwrite=True)
+            content = _get_dbutils().fs.head(src_json_path, 10485760)
+            _get_dbutils().fs.put(dest_json_path, content, overwrite=True)
         except:
             # Copy using standard file ops
             with open(src_json_path, 'r') as f:
@@ -280,7 +274,7 @@ def generate_bundle_structure(
     dashboards_yml = create_dashboards_yml(dashboard_resources)
     
     try:
-        dbutils.fs.put(f"{bundle_path}/resources/dashboards.yml", dashboards_yml, overwrite=True)
+        _get_dbutils().fs.put(f"{bundle_path}/resources/dashboards.yml", dashboards_yml, overwrite=True)
     except:
         with open(f"{bundle_path}/resources/dashboards.yml", 'w') as f:
             f.write(dashboards_yml)

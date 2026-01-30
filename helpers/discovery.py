@@ -2,17 +2,11 @@
 Dashboard discovery functions.
 """
 
+from .dbutils_helper import get_dbutils as _get_dbutils
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.service.dashboards import DashboardView
 from typing import List, Dict, Optional
 from .config_loader import get_dashboard_selection
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
 def _get_workspace_id(client: WorkspaceClient) -> int:
     """
@@ -34,7 +28,7 @@ def _get_workspace_id(client: WorkspaceClient) -> int:
     
     # Method 2: Try to get from notebook context
     try:
-        workspace_id = dbutils.notebook.entry_point.getDbutils().notebook().getContext().tags().get("orgId").get()
+        workspace_id = _get_dbutils().notebook.entry_point.getDbutils().notebook().getContext().tags().get("orgId").get()
         return int(workspace_id)
     except:
         pass
@@ -315,7 +309,7 @@ def _discover_from_inventory(csv_path: Optional[str] = None) -> List[Dict]:
         csv_path = get_path('inventory')
         csv_path = f"{csv_path}/dashboard_inventory.csv"
     
-    content = dbutils.fs.head(csv_path, 10485760)
+    content = _get_dbutils().fs.head(csv_path, 10485760)
     df = pd.read_csv(io.StringIO(content))
     
     return df.to_dict('records')

@@ -2,16 +2,10 @@
 ACL and permissions management.
 """
 
+from .dbutils_helper import get_dbutils as _get_dbutils
 from databricks.sdk import WorkspaceClient
 from typing import Dict, List
 import json
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
 def get_dashboard_permissions(client: WorkspaceClient, dashboard_id: str) -> Dict:
     """
@@ -129,11 +123,11 @@ def load_permissions_from_volume(export_path: str) -> Dict[str, Dict]:
     permissions_map = {}
     
     try:
-        files = dbutils.fs.ls(export_path)
+        files = _get_dbutils().fs.ls(export_path)
         perm_files = [f for f in files if '_permissions.json' in f.path]
         
         for perm_file in perm_files:
-            content = dbutils.fs.head(perm_file.path, 10485760)
+            content = _get_dbutils().fs.head(perm_file.path, 10485760)
             perm_data = json.loads(content)
             
             dashboard_id = perm_data.get('dashboard_id')

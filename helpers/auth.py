@@ -2,16 +2,10 @@
 Authentication and workspace client creation.
 """
 
+from .dbutils_helper import get_dbutils as _get_dbutils
 from databricks.sdk import WorkspaceClient
 from typing import Optional
 from .config_loader import get_config
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
 
 def create_workspace_client(
     workspace: str = 'source',
@@ -41,7 +35,7 @@ def create_workspace_client(
         # PAT authentication
         scope = auth_config['pat']['secret_scope']
         key = auth_config['pat']['secret_key']
-        token = dbutils.secrets.get(scope=scope, key=key)
+        token = _get_dbutils().secrets.get(scope=scope, key=key)
         
         return WorkspaceClient(host=workspace_url, token=token)
     
@@ -49,11 +43,11 @@ def create_workspace_client(
         # Service Principal authentication
         sp_config = auth_config['service_principal']
         
-        client_id = dbutils.secrets.get(
+        client_id = _get_dbutils().secrets.get(
             scope=sp_config['client_id_scope'],
             key=sp_config['client_id_key']
         )
-        client_secret = dbutils.secrets.get(
+        client_secret = _get_dbutils().secrets.get(
             scope=sp_config['client_secret_scope'],
             key=sp_config['client_secret_key']
         )

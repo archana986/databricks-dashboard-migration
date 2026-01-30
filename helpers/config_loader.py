@@ -6,13 +6,7 @@ import os
 import yaml
 from pathlib import Path
 from typing import Dict, Any, Optional
-
-# Initialize dbutils for module scope (Databricks-specific)
-try:
-    dbutils
-except NameError:
-    import IPython
-    dbutils = IPython.get_ipython().user_ns.get("dbutils")
+from .dbutils_helper import get_dbutils as _get_dbutils
 
 _config_cache: Optional[Dict[str, Any]] = None
 
@@ -38,9 +32,13 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
         try:
             # In Databricks workspace/job context
             try:
-                notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
-                bundle_parent = os.path.dirname(os.path.dirname(notebook_path))
-                config_path = f"/Workspace{bundle_parent}/config/config.yaml"
+                dbutils = _get_dbutils()
+                if dbutils:
+                    notebook_path = dbutils.notebook.entry_point.getDbutils().notebook().getContext().notebookPath().get()
+                    bundle_parent = os.path.dirname(os.path.dirname(notebook_path))
+                    config_path = f"/Workspace{bundle_parent}/config/config.yaml"
+                else:
+                    raise Exception("dbutils not available")
             except:
                 # Fallback: try relative paths for local execution
                 possible_paths = [
@@ -68,8 +66,12 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
                 config = yaml.safe_load(f)
         elif config_path.startswith('/Volumes') or config_path.startswith('dbfs:'):
             # Volume or DBFS path - use dbutils
-            content = dbutils.fs.head(config_path, 10485760)
-            config = yaml.safe_load(content)
+            dbutils = _get_dbutils()
+            if dbutils:
+                content = dbutils.fs.head(config_path, 10485760)
+                config = yaml.safe_load(content)
+            else:
+                raise RuntimeError(f"dbutils not available to read {config_path}")
         else:
             # Local file path
             with open(config_path, 'r') as f:
