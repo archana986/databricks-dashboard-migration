@@ -24,8 +24,8 @@ Customer-Work/Catalog Migration/
 │   └── ...
 │
 ├── Bundle/                       ← BUNDLE APPROACH (test this first)
-│   ├── Bundle_01_Export_and_Transform.ipynb
-│   ├── Bundle_02_Generate_and_Deploy.ipynb
+│   ├── Bundle_03_Export_and_Transform.ipynb
+│   ├── Bundle_04_Generate_and_Deploy.ipynb
 │   └── README.md
 │
 ├── notebooks/                    ← MANUAL APPROACH (alternative)
@@ -196,7 +196,7 @@ dbutils.fs.put("/Volumes/.../mappings/catalog_schema_mapping.csv", csv, True)
 
 ### Step 3: Run Bundle_01 (2 minutes)
 
-Open `Bundle/Bundle_01_Export_and_Transform.ipynb`
+Open `Bundle/Bundle_03_Export_and_Transform.ipynb`
 
 Click **Run All**
 
@@ -204,7 +204,7 @@ Expected output: ✅ Exported and transformed X dashboards
 
 ### Step 4: Run Bundle_02 (3 minutes)
 
-Open `Bundle/Bundle_02_Generate_and_Deploy.ipynb`
+Open `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
 Click **Run All**
 
@@ -239,8 +239,8 @@ Expected output: ✅ Bundle deployed successfully!
 ### Bundle Approach (Recommended - Test First)
 
 **Notebooks:**
-1. `Bundle/Bundle_01_Export_and_Transform.ipynb`
-2. `Bundle/Bundle_02_Generate_and_Deploy.ipynb`
+1. `Bundle/Bundle_03_Export_and_Transform.ipynb`
+2. `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
 **Benefits:**
 - ✅ Automated deployment

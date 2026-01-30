@@ -70,7 +70,7 @@ databricks bundle run generate_deploy -t dev
 
 **⚠️ IMPORTANT**: For interactive execution, you MUST run Cell 0.5 first!
 
-1. Open `Bundle/Bundle_00_Inventory_Generation.ipynb`
+1. Open `Bundle/Bundle_01_Inventory_Generation.ipynb`
 2. **Run Cell 0.5** to create test widgets:
    ```python
    # Uncomment and customize:
@@ -159,14 +159,14 @@ For local/interactive notebook execution:
 
 ### ✅ Completed
 - [x] databricks.yml expanded with all variables
-- [x] Bundle_00_Inventory_Generation.ipynb updated
+- [x] Bundle_01_Inventory_Generation.ipynb updated
 - [x] README.md rewritten with comprehensive instructions
 - [x] .gitignore updated
 - [x] Committed and pushed to GitHub
 
 ### ⚠️ TODO
-- [ ] Bundle_01_Export_and_Transform.ipynb needs similar update
-- [ ] Bundle_02_Generate_and_Deploy.ipynb needs similar update
+- [ ] Bundle_03_Export_and_Transform.ipynb needs similar update
+- [ ] Bundle_04_Generate_and_Deploy.ipynb needs similar update
 - [ ] Test full workflow end-to-end
 
 **Note**: Bundle_01 and Bundle_02 currently still have config.yaml fallback logic. They will work with jobs (parameters passed) but interactive execution may fall back to config.yaml if Cell 0.5 isn't set up.

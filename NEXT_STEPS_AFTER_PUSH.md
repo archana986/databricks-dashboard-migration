@@ -7,7 +7,7 @@
 **Files changed:**
 - `helpers/discovery.py` - Added inventory functions
 - `helpers/__init__.py` - Exported new functions
-- `Bundle/Bundle_01_Export_and_Transform.ipynb` - Added review cells
+- `Bundle/Bundle_03_Export_and_Transform.ipynb` - Added review cells
 - `.gitignore` - Excluded personal guides
 - `INVENTORY_WORKFLOW.md` - Documentation (NEW)
 
@@ -49,7 +49,7 @@ If you see them, helpers are updated! ✅
 
 ### B. Check Bundle_01 Notebook
 
-**Navigate to:** `Repos → dashboard-migration → Bundle → Bundle_01_Export_and_Transform.ipynb`
+**Navigate to:** `Repos → dashboard-migration → Bundle → Bundle_03_Export_and_Transform.ipynb`
 
 **You should see NEW cells:**
 - Cell 3a: "Save Inventory to CSV"
@@ -64,7 +64,7 @@ If you see these new cells, notebook is updated! ✅
 
 ### Open Bundle_01 in Databricks
 
-**Path:** `Repos → dashboard-migration → Bundle → Bundle_01_Export_and_Transform.ipynb`
+**Path:** `Repos → dashboard-migration → Bundle → Bundle_03_Export_and_Transform.ipynb`
 
 ### Run Cells in Order:
 
@@ -252,7 +252,7 @@ Repos → Your Repo → "..." menu → Pull
 
 1. ✅ Go to Databricks
 2. ✅ Pull changes in your Repo
-3. ✅ Open Bundle_01_Export_and_Transform.ipynb
+3. ✅ Open Bundle_03_Export_and_Transform.ipynb
 4. ✅ Run cells and test the new inventory workflow
 5. ✅ Review inventory before proceeding
 6. ✅ Confirm and complete migration

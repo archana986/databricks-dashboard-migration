@@ -226,7 +226,7 @@ Migration proceeds with only the 45 validated dashboards!
 
 ## Cell Structure in Updated Notebooks
 
-### Bundle_01_Export_and_Transform.ipynb:
+### Bundle_03_Export_and_Transform.ipynb:
 
 ```
 Cell 0: Overview

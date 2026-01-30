@@ -123,7 +123,7 @@ This is a **mandatory manual step** that must be completed in Databricks UI.
 
 1. **Open the notebook** in Databricks UI:
    - Navigate to Workspace
-   - Find: `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
+   - Find: `Bundle/Bundle_02_Review_and_Approve_Inventory.ipynb`
    - Open and attach to a cluster
 
 2. **Update configuration** (Cell 1):
@@ -192,7 +192,7 @@ databricks bundle run generate_deploy -t dev
 
 **⚠️ IMPORTANT**: For interactive execution, you must set up test widgets first!
 
-1. **Open notebook** in Databricks: `Bundle/Bundle_00_Inventory_Generation.ipynb`
+1. **Open notebook** in Databricks: `Bundle/Bundle_01_Inventory_Generation.ipynb`
 
 2. **Run Cell 0.5** (Interactive Testing Setup) to create widgets:
    ```python
@@ -216,9 +216,9 @@ databricks bundle run generate_deploy -t dev
 dashboard-migration/
 ├── databricks.yml              # SINGLE SOURCE OF TRUTH - All configuration here
 ├── Bundle/
-│   ├── Bundle_00_Inventory_Generation.ipynb  # Step 1: Discover dashboards
-│   ├── Bundle_01_Export_and_Transform.ipynb  # Step 2: Export & transform
-│   └── Bundle_02_Generate_and_Deploy.ipynb   # Step 3: Deploy to target
+│   ├── Bundle_01_Inventory_Generation.ipynb  # Step 1: Discover dashboards
+│   ├── Bundle_03_Export_and_Transform.ipynb  # Step 2: Export & transform
+│   └── Bundle_04_Generate_and_Deploy.ipynb   # Step 3: Deploy to target
 ├── helpers/                     # Python helper functions
 │   ├── __init__.py
 │   ├── auth.py                 # Authentication

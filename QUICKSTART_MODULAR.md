@@ -81,8 +81,8 @@ Open `notebooks/01_Export_and_Transform.ipynb` and run all cells.
 
 **Option 1 (Recommended): Bundle Approach**
 ```
-1. Run Bundle/Bundle_01_Export_and_Transform.ipynb
-2. Run Bundle/Bundle_02_Generate_and_Deploy.ipynb
+1. Run Bundle/Bundle_03_Export_and_Transform.ipynb
+2. Run Bundle/Bundle_04_Generate_and_Deploy.ipynb
 ```
 **No timeouts, batch deployment, most reliable**
 

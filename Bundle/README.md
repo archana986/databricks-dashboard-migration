@@ -112,7 +112,7 @@ data_security_mode: USER_ISOLATION
 
 ### Step 1: Generate Inventory
 
-**Notebook:** `Bundle_00_Inventory_Generation.ipynb`
+**Notebook:** `Bundle_01_Inventory_Generation.ipynb`
 
 **Run via Asset Bundle:**
 ```bash
@@ -143,7 +143,7 @@ databricks bundle run inventory_generation -t dev
 
 ### Step 2: Export & Transform
 
-**Notebook:** `Bundle_01_Export_and_Transform.ipynb`
+**Notebook:** `Bundle_03_Export_and_Transform.ipynb`
 
 **Run via Asset Bundle:**
 ```bash
@@ -176,7 +176,7 @@ Only these dashboards will be exported and migrated.
 
 ### Step 3: Generate & Deploy
 
-**Notebook:** `Bundle_02_Generate_and_Deploy.ipynb`
+**Notebook:** `Bundle_04_Generate_and_Deploy.ipynb`
 
 **Run via Asset Bundle:**
 ```bash
@@ -204,10 +204,10 @@ databricks bundle run generate_deploy -t dev
 
 ```mermaid
 flowchart LR
-    A[Bundle_00<br/>Inventory] --> B[inventory.csv]
-    B --> C[Bundle_01<br/>Export & Transform]
+    A[Bundle_01<br/>Inventory] --> B[inventory.csv]
+    B --> C[Bundle_03<br/>Export & Transform]
     C --> D[Transformed JSONs]
-    D --> E[Bundle_02<br/>Generate & Deploy]
+    D --> E[Bundle_04<br/>Generate & Deploy]
     E --> F[Target Workspace]
     
     G[Optional Filter CSV] -.-> C
@@ -223,7 +223,7 @@ bundle:
 resources:
   jobs:
     inventory_generation:      # Step 1
-      - Bundle_00 notebook
+      - Bundle_01 notebook
       - Serverless compute (17.3 LTS, auto-scaling)
       - Alternative: 17.3 LTS + Photon
       
@@ -232,7 +232,7 @@ resources:
       - Standard cluster (17.3 LTS) + SDK
       
     generate_deploy:           # Step 3
-      - Bundle_02 notebook
+      - Bundle_04 notebook
       - Standard cluster (17.3 LTS) + CLI
 ```
 
@@ -256,9 +256,9 @@ resources:
 Customer-Work/Catalog Migration/
 ├── databricks.yml                    # Asset Bundle config
 ├── Bundle/
-│   ├── Bundle_00_Inventory_Generation.ipynb   # Step 1: Discovery
-│   ├── Bundle_01_Export_and_Transform.ipynb   # Step 2: Export (CSV-driven)
-│   ├── Bundle_02_Generate_and_Deploy.ipynb    # Step 3: Deploy
+│   ├── Bundle_01_Inventory_Generation.ipynb   # Step 1: Discovery
+│   ├── Bundle_03_Export_and_Transform.ipynb   # Step 3: Export (CSV-driven)
+│   ├── Bundle_04_Generate_and_Deploy.ipynb    # Step 4: Deploy
 │   └── README.md                              # This file
 ├── helpers/
 │   ├── volume_utils.py              # NEW: read_csv_from_volume, write_csv_to_volume

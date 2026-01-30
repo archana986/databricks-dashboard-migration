@@ -61,7 +61,7 @@ databricks bundle run inventory_generation -t dev --profile e2-field-engg
 
 In Databricks UI, navigate to:
 ```
-Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb
+Bundle/Bundle_02_Review_and_Approve_Inventory.ipynb
 ```
 
 #### 2. Update Configuration (Cell 1)
@@ -231,7 +231,7 @@ Expected location: /Volumes/.../dashboard_inventory_approved/inventory.csv
 
 🎯 REQUIRED ACTIONS:
    1. Run Step 1: databricks bundle run inventory_generation -t dev
-   2. Run Step 2: Open Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb
+   2. Run Step 2: Open Bundle/Bundle_02_Review_and_Approve_Inventory.ipynb
               in Databricks UI and complete the review process
 ```
 
@@ -310,6 +310,6 @@ df_approved = df.filter(df.dashboard_id.isin(approved_ids))
 
 **Last Updated**: 2026-01-30  
 **Related Files**: 
-- `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb` (Step 2 notebook)
+- `Bundle/Bundle_02_Review_and_Approve_Inventory.ipynb` (Step 2 notebook)
 - `databricks.yml` (Configuration)
 - `README.md` (Quick start guide)

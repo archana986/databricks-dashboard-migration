@@ -132,7 +132,7 @@ WHERE workspace_id = {workspace_id}
 
 ### Key Columns Displayed in Notebook
 
-When you run `Bundle_01_Export_and_Transform.ipynb`, the inventory display shows:
+When you run `Bundle_03_Export_and_Transform.ipynb`, the inventory display shows:
 
 1. **dashboard_name** - Easy identification
 2. **published** - Migration priority (published = production)

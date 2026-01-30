@@ -265,7 +265,7 @@ The Bundle approach is **faster, more reliable**, and has **no timeout issues**.
 
 ### Step 1: Open Bundle_01 Notebook
 
-**Path:** `Bundle/Bundle_01_Export_and_Transform.ipynb`
+**Path:** `Bundle/Bundle_03_Export_and_Transform.ipynb`
 
 **Where to run:** Source workspace (where dashboards currently exist)
 
@@ -348,7 +348,7 @@ SUMMARY
 
 📁 Files ready at: /Volumes/.../transformed
 
-▶️  Next: Run Bundle_02_Generate_and_Deploy.ipynb
+▶️  Next: Run Bundle_04_Generate_and_Deploy.ipynb
 ```
 
 **✅ Verification:**
@@ -377,7 +377,7 @@ print(content)
 
 ### Step 3: Open Bundle_02 Notebook
 
-**Path:** `Bundle/Bundle_02_Generate_and_Deploy.ipynb`
+**Path:** `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
 **Where to run:** Can run in either workspace (it deploys to target)
 
@@ -685,8 +685,8 @@ helpers/
 └── [other modules]                      # Reusable functions
 
 Bundle/                                   # BUNDLE APPROACH
-├── Bundle_01_Export_and_Transform.ipynb # Export & transform
-└── Bundle_02_Generate_and_Deploy.ipynb  # Generate & deploy
+├── Bundle_03_Export_and_Transform.ipynb # Export & transform
+└── Bundle_04_Generate_and_Deploy.ipynb  # Generate & deploy
 
 notebooks/                                # MANUAL APPROACH
 ├── 01_Export_and_Transform.ipynb        # Export & transform

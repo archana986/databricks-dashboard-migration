@@ -89,7 +89,7 @@ git status
 Changes to be committed:
   new file:   config/config.yaml
   new file:   helpers/__init__.py
-  new file:   Bundle/Bundle_01_Export_and_Transform.ipynb
+  new file:   Bundle/Bundle_03_Export_and_Transform.ipynb
   ...
 ```
 
@@ -234,7 +234,7 @@ gh repo create dashboard-migration --private --source=. --remote=origin --push
    - Repos → dashboard-migration → Bundle/
 
 2. **Open a notebook:**
-   - Click `Bundle_01_Export_and_Transform.ipynb`
+   - Click `Bundle_03_Export_and_Transform.ipynb`
    - Notebook should open with all your code!
 
 3. **Check helper files:**
@@ -304,7 +304,7 @@ git push
 
 1. **Navigate to Bundle approach:**
    ```
-   Repos → dashboard-migration → Bundle → Bundle_01_Export_and_Transform.ipynb
+   Repos → dashboard-migration → Bundle → Bundle_03_Export_and_Transform.ipynb
    ```
 
 2. **The notebook imports will work!**
@@ -453,8 +453,8 @@ git status                         # Check status
 Once Repos is set up:
 
 1. ✅ **Edit** `config/config.yaml` (in Databricks or locally)
-2. ✅ **Run** `Bundle/Bundle_01_Export_and_Transform.ipynb`
-3. ✅ **Run** `Bundle/Bundle_02_Generate_and_Deploy.ipynb`
+2. ✅ **Run** `Bundle/Bundle_03_Export_and_Transform.ipynb`
+3. ✅ **Run** `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 4. ✅ **Make changes** - They auto-sync!
 
 **No more manual uploads! Everything just works! 🚀**

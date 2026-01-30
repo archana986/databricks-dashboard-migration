@@ -48,8 +48,8 @@ Customer-Work/Catalog Migration/
 │   └── 02_Apply_Permissions.ipynb     # Apply ACLs after manual import
 │
 ├── Bundle/                             # Alternative: Bundle-based deployment
-│   ├── Bundle_01_Export_and_Transform.ipynb
-│   ├── Bundle_02_Generate_and_Deploy.ipynb
+│   ├── Bundle_03_Export_and_Transform.ipynb
+│   ├── Bundle_04_Generate_and_Deploy.ipynb
 │   └── README.md
 │
 └── _archive/                           # Old notebooks (deprecated)
@@ -111,8 +111,8 @@ Choose your preferred method:
 
 **Option A: Bundle Approach (Recommended)**
 ```
-1. Run Bundle/Bundle_01_Export_and_Transform.ipynb
-2. Run Bundle/Bundle_02_Generate_and_Deploy.ipynb
+1. Run Bundle/Bundle_03_Export_and_Transform.ipynb
+2. Run Bundle/Bundle_04_Generate_and_Deploy.ipynb
 ```
 
 **Option B: Databricks UI**
