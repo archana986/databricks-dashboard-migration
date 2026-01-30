@@ -87,6 +87,18 @@ def load_config(config_path: str = None) -> Dict[str, Any]:
     
     return config
 
+def set_config(config: Dict[str, Any]) -> None:
+    """
+    Set/cache configuration dictionary.
+    
+    Useful when config is built from parameters rather than loaded from file.
+    
+    Args:
+        config: Configuration dictionary to cache
+    """
+    global _config_cache
+    _config_cache = config
+
 def get_config() -> Dict[str, Any]:
     """
     Get cached configuration.
