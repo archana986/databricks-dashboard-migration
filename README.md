@@ -101,37 +101,99 @@ databricks bundle validate -t dev
 **Step 1: Generate Inventory**
 ```bash
 # Discover dashboards and create inventory CSV
+# Also creates volume and both directories if they don't exist
 databricks bundle run inventory_generation -t dev
 
 # View job status
 databricks jobs list-runs --limit 1
 ```
 
-**Step 1a: Review & Approve Inventory** (QC Gate)
+**Output:**
+- Volume created (if not exists)
+- `dashboard_inventory/` directory created with `inventory.csv`
+- `dashboard_inventory_approved/` directory created (empty, ready for manual upload)
 
-Open the review notebook in Databricks UI:
-- Navigate to `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
-- Run cells to review inventory statistics
-- Customize filtering in Cell 5 (remove failed lookups, inactive dashboards, etc.)
-- Run Cell 7 to save approved inventory
+---
 
-**OR** use quick SQL/Python:
-```python
-# Load and filter
-df = spark.read.csv("{volume_base}/dashboard_inventory/inventory.csv", header=True, inferSchema=True)
-df_approved = df.filter(~df.dashboard_name.startswith('Dashboard_'))  # Remove failed lookups
+**Step 1a: Review & Approve** (MANUAL STEP - Choose One Option)
 
-# Save to approved location
-df_approved.toPandas().to_csv("{volume_base}/dashboard_inventory_approved/inventory.csv", index=False)
-```
+## Option A: Manual CSV Editing
 
-See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed instructions.
+1. **Download** the inventory CSV from the volume:
+   - Via UI: Navigate to Catalog Explorer → Your Volume → `dashboard_inventory/inventory.csv`
+   - Via code: Use `dbutils.fs.head()` or download via API
 
-**Step 2: Export & Transform** (Uses approved inventory)
+2. **Edit** the file:
+   - Open in Excel or text editor
+   - Delete rows for dashboards you don't want to migrate
+   - Save your changes
+
+3. **Upload** to approved location:
+   - Via UI: Navigate to `dashboard_inventory_approved/` and upload as `inventory.csv`
+   - Via code:
+     ```python
+     # Upload edited CSV
+     volume_base = "/Volumes/your_catalog/your_schema/dashboard_migration"
+     approved_path = f"{volume_base}/dashboard_inventory_approved/inventory.csv"
+     
+     # Read your edited CSV content
+     with open('path/to/edited/inventory.csv', 'r') as f:
+         csv_content = f.read()
+     
+     dbutils.fs.put(approved_path, csv_content, overwrite=True)
+     print(f"✅ Uploaded to: {approved_path}")
+     ```
+
+4. **Verify** upload succeeded:
+   ```python
+   df = spark.read.csv(approved_path, header=True, inferSchema=True)
+   print(f"✅ Approved: {df.count()} dashboards")
+   display(df)
+   ```
+
+## Option B: Interactive Helper Notebook
+
+1. **Open** the helper notebook in Databricks UI:
+   `Bundle/Bundle_00a_Review_and_Approve_Inventory.ipynb`
+
+2. **Run cells** to review and filter:
+   - Cell 1: Configuration (auto-detects UI/CLI mode)
+   - Cells 2-4: View stats and identify issues
+   - Cell 5: Customize filters (remove failed lookups, inactive dashboards, etc.)
+   - Cell 6: Review approved list
+
+3. **Upload** with confirmation:
+   - Cell 7: Type `CONFIRM` to upload approved inventory
+   - Cell 8: Verify upload succeeded
+
+**Benefits:**
+- Interactive filtering with live dashboard counts
+- Built-in issue detection (failed lookups, inactive dashboards, zero tables)
+- Automatic upload with confirmation
+- Immediate verification
+
+See [`QC_WORKFLOW.md`](QC_WORKFLOW.md) for detailed step-by-step instructions for both options.
+
+---
+
+**Step 2: Export & Transform**
+
+**Prerequisites:**
+- ✅ Step 1 completed
+- ✅ Approved CSV uploaded to `dashboard_inventory_approved/inventory.csv`
+
+**Run:**
 ```bash
 # Export dashboards and apply transformations
 databricks bundle run export_transform -t dev
 ```
+
+**What Step 2 does:**
+- Verifies approved inventory exists and checks file age
+- Fails with clear error if approved CSV is missing
+- Exports only the approved dashboards
+- Applies transformations (if enabled)
+- Captures permissions
 
 **Step 3: Generate & Deploy** (Final step)
 ```bash
