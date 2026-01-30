@@ -64,7 +64,7 @@ The bundle uses **different cluster configurations** optimized for each job:
 
 **Default: TRUE Serverless Compute** ⚡
 ```yaml
-spark_version: "17.3.x-scala2.12"  # 17.3 LTS (Apache Spark 3.5.4)
+spark_version: "17.3.x-scala2.12"  # Recommended: Latest LTS (e.g., 17.3 includes Spark 3.5.4)
 num_workers: 0  # Serverless (auto-scaling)
 data_security_mode: SINGLE_USER
 ```
@@ -77,7 +77,7 @@ data_security_mode: SINGLE_USER
 
 **Alternative: 17.3 LTS with Photon** (if serverless unavailable)
 ```yaml
-spark_version: "17.3.x-scala2.12"
+spark_version: "17.3.x-scala2.12"  # Recommended: Latest LTS
 node_type_id: "i3.xlarge"
 num_workers: 2
 runtime_engine: PHOTON
@@ -88,7 +88,7 @@ data_security_mode: USER_ISOLATION
 
 **Configuration:**
 ```yaml
-spark_version: "17.3.x-scala2.12"  # 17.3 LTS (Apache Spark 3.5.4)
+spark_version: "17.3.x-scala2.12"  # Recommended: Latest LTS
 node_type_id: "i3.xlarge"
 num_workers: 1
 data_security_mode: USER_ISOLATION
@@ -101,7 +101,7 @@ data_security_mode: USER_ISOLATION
 
 ### Important Notes
 
-- Always use 17.3 LTS (or latest LTS)
+- Recommended: Use latest LTS (e.g., 17.3.x-scala2.12 as of Jan 2026)
 - Serverless requires `num_workers: 0`
 - Standard clusters need explicit `num_workers` (1+)
 - All configs in `databricks.yml` lines 48-142
@@ -132,7 +132,7 @@ databricks bundle run inventory_generation -t dev
 
 **Output:** Complete dashboard inventory with metadata
 
-**Cluster:** Serverless compute (17.3 LTS, auto-scaling)
+**Cluster:** Serverless compute (latest LTS recommended, auto-scaling)
 
 **Performance:**
 - Optimized SQL JOINs (2 queries total vs 400+ in old approach)
