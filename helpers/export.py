@@ -12,6 +12,7 @@ def export_dashboard(
 ) -> Tuple[str, str, str]:
     """
     Export dashboard JSON and metadata.
+    Exports DRAFT version (not published) to capture all changes.
     
     Args:
         client: Workspace client
@@ -20,12 +21,12 @@ def export_dashboard(
     Returns:
         Tuple of (dashboard_json, display_name, clean_name)
     """
-    # Get dashboard
+    # Get dashboard (draft version)
     dash = client.lakeview.get(dashboard_id)
-    published = client.lakeview.get_published(dashboard_id)
     
-    # Get JSON content
-    json_content = published.serialized_dashboard
+    # Get JSON content from draft
+    # Note: We export the DRAFT (not published) to capture latest changes
+    json_content = dash.serialized_dashboard
     display_name = dash.display_name or "unnamed"
     
     # Clean name for file naming
