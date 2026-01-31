@@ -175,7 +175,7 @@ databricks bundle run generate_deploy -t dev
 
 ## ⚙️ Compute Options
 
-### Serverless (Default - Recommended)
+### Serverless (Default - Recommended) ✅
 
 **Configuration**: Already enabled in `databricks.yml`
 
@@ -184,11 +184,14 @@ databricks bundle run generate_deploy -t dev
 - ✅ Auto-scaling
 - ✅ No version management
 - ✅ Handles dependencies automatically
+- ✅ Direct volume path access (no `/dbfs` prefix issues)
 
 **Use for:**
 - All migration steps
 - Development and testing
 - Production deployments
+
+**Status**: ✅ Fully compatible - all notebooks tested and working
 
 ### Standard Clusters (Optional)
 
@@ -226,7 +229,9 @@ job_clusters:
 | Cost | Pay per second | Pay per hour (min 1hr) |
 | Scaling | Automatic | Manual configuration |
 | Dependencies | Auto-managed | Manual install |
-| Best For | Migration tasks | Heavy compute |
+| Volume Access | Direct `/Volumes/` | Direct `/Volumes/` or `/dbfs/Volumes/` |
+| Best For | Migration tasks ✅ | Heavy compute |
+| **Compatibility** | **✅ Fully tested** | **⚠️ Needs testing** |
 
 ## 🗂️ Project Structure
 
