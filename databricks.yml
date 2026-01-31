@@ -156,7 +156,7 @@ resources:
           
           # ALTERNATIVE: Standard cluster with Photon (Uncomment if serverless not working)
           # new_cluster:
-          #   spark_version: "14.3.x-scala2.12"  # Current LTS - change to latest available
+          #   spark_version: "15.4.x-scala2.12"  # Use 15.4 LTS (most compatible)
           #   node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
           #   num_workers: 2                      # Adjust based on workload
           #   runtime_engine: PHOTON              # Recommended for performance
@@ -222,7 +222,7 @@ resources:
       # job_clusters:
       #   - job_cluster_key: export_cluster
       #     new_cluster:
-      #       spark_version: "14.3.x-scala2.12"  # Current LTS - change to latest available
+      #       spark_version: "15.4.x-scala2.12"  # Current LTS - change to latest available
       #       node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
       #       num_workers: 2                      # Adjust based on workload
       #       runtime_engine: PHOTON              # Recommended for performance
@@ -245,13 +245,17 @@ resources:
               # Core config
               catalog: ${var.catalog}
               volume_base: ${var.volume_base}
+              source_workspace_url: ${var.source_workspace_url}
               target_workspace_url: ${var.target_workspace_url}
               # Paths
+              exported_path: ${var.exported_path}
               transformed_path: ${var.transformed_path}
               bundles_path: ${var.bundles_path}
               target_parent_path: ${var.target_parent_path}
               # Warehouse
               warehouse_name: ${var.warehouse_name}
+              # Bundle options
+              bundle_name: ${bundle.name}
               # Options
               apply_permissions: ${var.apply_permissions}
               permissions_dry_run: ${var.permissions_dry_run}
@@ -276,13 +280,15 @@ resources:
           #       package: "databricks-sdk>=0.18.0"
           #   - pypi:
           #       package: "pyyaml>=6.0"
+          #   - pypi:
+          #       package: "databricks-cli>=0.18.0"
       
       # ALTERNATIVE: Standard cluster configuration (Uncomment if serverless not suitable)
       # NOTE: Also uncomment the libraries section above when using standard cluster
       # job_clusters:
       #   - job_cluster_key: deploy_cluster
       #     new_cluster:
-      #       spark_version: "14.3.x-scala2.12"  # Current LTS - change to latest available
+      #       spark_version: "15.4.x-scala2.12"  # Current LTS - change to latest available
       #       node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
       #       num_workers: 2                      # Adjust based on workload
       #       runtime_engine: PHOTON              # Recommended for performance
@@ -314,6 +320,26 @@ targets:
       
       # Dev-specific overrides (optional)
       # permissions_dry_run: "true"  # Keep true for testing
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # STAGING ENVIRONMENT (Template - customize before use)
+  # ──────────────────────────────────────────────────────────────────────────
+  staging:
+    mode: development  # Use 'development' mode for staging
+    workspace:
+      host: https://your-staging-workspace.cloud.databricks.com  # CHANGE THIS to staging workspace URL
+    
+    variables:
+      # Core configuration - CUSTOMIZE THESE
+      catalog: staging_catalog  # Source catalog in staging
+      volume_base: /Volumes/staging_catalog/migration/dashboard_migration  # Staging volume path
+      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # Source workspace (usually dev or prod)
+      target_workspace_url: https://your-staging-workspace.cloud.databricks.com  # CHANGE THIS
+      warehouse_name: staging_warehouse  # CHANGE THIS to staging warehouse name
+      
+      # Staging-specific overrides
+      permissions_dry_run: "true"  # Test permissions without applying
+      audit_lookback_days: 30  # Shorter lookback for staging
   
   # ──────────────────────────────────────────────────────────────────────────
   # PROD ENVIRONMENT (Template - customize before use)
