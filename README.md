@@ -323,13 +323,17 @@ databricks bundle run export_transform -t dev --profile source-workspace
 
 # Step 3.5: Configure cross-workspace auth (see section above)
 # - Set up SP OAuth (recommended) or PAT token
-# - Whitelist IP if target has IP ACLs
+# - Whitelist IP if target has IP ACLs:
+./scripts/auto_setup_ip_acl.sh --source-profile source-workspace --target-profile target-workspace
 
 # Step 4: Deploy (dry run first - safe)
 databricks bundle run generate_deploy -t dev --profile source-workspace
 
 # Step 4: Deploy (live - creates resources)
 databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --profile source-workspace
+
+# Step 5: Validate and cleanup IP whitelist
+./scripts/cleanup_ip_acl.sh --target-profile target-workspace
 ```
 
 ## Workflow Steps Detail
@@ -372,11 +376,51 @@ Choose one:
 - **Recommended**: Service Principal OAuth M2M (see [Option 1](#option-1-service-principal-oauth-m2m-recommended))
 - **Alternative**: PAT Token (see [Option 2](#option-2-pat-token-alternative---quick-setup))
 
+**If target workspace has IP Access Lists enabled**, whitelist the source cluster IP:
+
+```bash
+# Option A: Automated script (recommended)
+./scripts/auto_setup_ip_acl.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace
+
+# Option B: Dry run first to see what would happen
+./scripts/auto_setup_ip_acl.sh --dry-run
+
+# Option C: Provide IP directly (skip auto-detection)
+./scripts/auto_setup_ip_acl.sh --cluster-ip 35.155.15.56
+```
+
+For detailed IP ACL setup instructions, see [Bundle/Bundle_IP_ACL_Setup.ipynb](Bundle/Bundle_IP_ACL_Setup.ipynb).
+
 ### Step 4: Generate and Deploy
 
 **Notebook**: `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
 Deploys dashboards to target workspace.
+
+```bash
+# Dry run (default - safe preview)
+databricks bundle run generate_deploy -t dev --profile source-workspace
+
+# Live deployment
+databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --profile source-workspace
+```
+
+### Step 5: Validate and Cleanup
+
+After successful migration, validate dashboards in the target workspace, then clean up IP whitelisting:
+
+```bash
+# After validating migration, remove IP from target allowlist
+./scripts/cleanup_ip_acl.sh --target-profile target-workspace
+
+# Or with specific IP
+./scripts/cleanup_ip_acl.sh --cluster-ip 35.155.15.56 --target-profile target-workspace
+
+# Skip confirmation prompts (automation)
+./scripts/cleanup_ip_acl.sh --force
+```
 
 ## Runtime Parameter Overrides
 
@@ -431,7 +475,16 @@ Catalog Migration/
 │   ├── Bundle_01_Inventory_Generation.ipynb
 │   ├── Bundle_02_Review_and_Approve_Inventory.ipynb
 │   ├── Bundle_03_Export_and_Transform.ipynb
-│   └── Bundle_04_Generate_and_Deploy.ipynb
+│   ├── Bundle_04_Generate_and_Deploy.ipynb
+│   └── Bundle_IP_ACL_Setup.ipynb     # IP whitelisting guide
+├── scripts/
+│   ├── auto_setup_ip_acl.sh          # Auto-detect and whitelist IP
+│   └── cleanup_ip_acl.sh             # Remove IP after migration
+├── ip-detection/
+│   ├── databricks.yml                # Mini-bundle for IP detection job
+│   ├── README.md
+│   └── notebooks/
+│       └── Detect_Cluster_IP.ipynb   # IP detection notebook
 ├── helpers/
 │   ├── __init__.py
 │   ├── auth.py                       # Workspace authentication
@@ -528,6 +581,6 @@ databricks bundle deploy -t dev --profile source-workspace
 
 ---
 
-**Version**: 2.3.0  
+**Version**: 2.4.0  
 **Last Updated**: February 2, 2026  
 **Status**: Production Ready

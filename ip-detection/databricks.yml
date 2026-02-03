@@ -1,0 +1,48 @@
+# Databricks Asset Bundle Configuration for IP Detection
+# This mini-bundle deploys the IP detection notebook to the workspace
+
+bundle:
+  name: ip-detection
+
+variables:
+  source_workspace_profile:
+    description: "Databricks CLI profile for source workspace"
+    default: "source-workspace"
+
+workspace:
+  root_path: "~/.bundle/ip-detection/${bundle.target}"
+
+resources:
+  jobs:
+    detect_cluster_ip:
+      name: "IP_Detection_${bundle.target}"
+      tasks:
+        - task_key: detect_ip
+          notebook_task:
+            notebook_path: "${workspace.file_path}/notebooks/Detect_Cluster_IP"
+            source: WORKSPACE
+          new_cluster:
+            spark_version: "17.3.x-scala2.13"
+            node_type_id: "i3.xlarge"
+            num_workers: 0
+            data_security_mode: "SINGLE_USER"  # Required for Unity Catalog
+            spark_conf:
+              spark.master: "local[*, 4]"
+              spark.databricks.cluster.profile: "singleNode"
+            custom_tags:
+              ResourceClass: "SingleNode"
+              Purpose: "IPDetection"
+          libraries: []
+      timeout_seconds: 900
+      max_concurrent_runs: 1
+
+targets:
+  dev:
+    mode: development
+    workspace:
+      host: ""  # Will use profile from CLI
+      profile: ${var.source_workspace_profile}
+
+sync:
+  include:
+    - notebooks/*.ipynb
