@@ -336,6 +336,132 @@ databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --pro
 ./scripts/cleanup_ip_acl.sh --target-profile target-workspace
 ```
 
+## Complete Command Reference
+
+All commands for a full end-to-end migration, organized by step. Copy-paste ready.
+
+### Prerequisites
+
+```bash
+# Ensure CLI is installed and profiles configured
+databricks --version  # Must be >= 0.218.0
+
+# Navigate to project folder
+cd "Customer-Folder/Catalog Migration"
+```
+
+### Step 0: Deploy Bundle (One-Time Setup)
+
+```bash
+databricks bundle deploy -t dev --profile source-workspace
+```
+
+### Step 1: Generate Inventory
+
+```bash
+databricks bundle run inventory_generation -t dev --profile source-workspace
+```
+
+### Step 2: Manual Review and Approval (UI Required)
+
+```
+# This step MUST be done in Databricks UI - no CLI command
+1. Open source workspace in browser
+2. Navigate to: Repos → [your-repo] → Bundle/Bundle_02_Review_and_Approve_Inventory.ipynb
+3. Run all cells to review inventory
+4. Select/deselect dashboards to migrate
+5. Run approval cell to save approved_inventory.csv
+```
+
+### Step 3: Export and Transform
+
+```bash
+databricks bundle run export_transform -t dev --profile source-workspace
+```
+
+### Step 3.5: Cross-Workspace Authentication
+
+Choose **one** authentication method:
+
+#### Option A: Service Principal OAuth (Recommended for Production)
+
+```bash
+# 1. Create secret scope
+databricks secrets create-scope migration_secrets --profile source-workspace
+
+# 2. Store SP credentials (Client ID and Secret from Account Console)
+databricks secrets put-secret migration_secrets sp_client_id --profile source-workspace
+databricks secrets put-secret migration_secrets sp_client_secret --profile source-workspace
+
+# 3. Update databricks.yml:
+#    auth_method: "sp_oauth"
+#    sp_secret_scope: "migration_secrets"
+```
+
+#### Option B: PAT Token (Quick Setup for Dev/Test)
+
+```bash
+# 1. Generate PAT in TARGET workspace UI: User Settings → Developer → Access Tokens
+
+# 2. Create secret scope in SOURCE workspace
+databricks secrets create-scope migration_secrets --profile source-workspace
+
+# 3. Store the PAT
+databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
+
+# 4. Update databricks.yml:
+#    auth_method: "pat"
+#    target_workspace_secret_scope: "migration_secrets"
+```
+
+### Step 3.5b: IP Whitelisting (If Target Has IP ACLs)
+
+> **Shell scripts only** - Run from local terminal, not Databricks UI
+
+```bash
+# Auto-detect cluster IP and whitelist on target (recommended)
+./scripts/auto_setup_ip_acl.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace
+
+# Or dry run first to preview
+./scripts/auto_setup_ip_acl.sh --dry-run
+
+# Or provide IP directly (skip auto-detection)
+./scripts/auto_setup_ip_acl.sh --cluster-ip YOUR.IP.HERE
+```
+
+### Step 4: Deploy Dashboards
+
+```bash
+# Dry run first (safe - no resources created)
+databricks bundle run generate_deploy -t dev --profile source-workspace
+
+# Live deployment (creates dashboards in target)
+databricks bundle run generate_deploy -t dev \
+  --params "dry_run_mode=false" \
+  --profile source-workspace
+
+# Optional: Asset Bundle deployment method
+databricks bundle run generate_deploy -t dev \
+  --params "dry_run_mode=false,deployment_method=asset_bundle" \
+  --profile source-workspace
+```
+
+### Step 5: Validate and Cleanup
+
+```bash
+# 1. Validate in target workspace UI:
+#    - Open target workspace
+#    - Navigate to SQL → Dashboards
+#    - Verify dashboards are present and working
+#    - Check permissions and schedules
+
+# 2. Cleanup IP whitelist (if you added one in Step 3.5b)
+# Shell script only - run from local terminal
+./scripts/cleanup_ip_acl.sh --target-profile target-workspace
+```
+
 ## Workflow Steps Detail
 
 ### Step 1: Inventory Generation
@@ -378,6 +504,8 @@ Choose one:
 
 **If target workspace has IP Access Lists enabled**, whitelist the source cluster IP:
 
+> **Note:** The IP ACL scripts are **bash shell scripts** that must be run from your **local terminal** (macOS, Linux, or Windows Git Bash/WSL). They cannot run inside Databricks notebooks or the Databricks UI. The scripts require the Databricks CLI to be installed and configured with profiles.
+
 ```bash
 # Option A: Automated script (recommended)
 ./scripts/auto_setup_ip_acl.sh \
@@ -391,7 +519,7 @@ Choose one:
 ./scripts/auto_setup_ip_acl.sh --cluster-ip 35.155.15.56
 ```
 
-For detailed IP ACL setup instructions, see [Bundle/Bundle_IP_ACL_Setup.ipynb](Bundle/Bundle_IP_ACL_Setup.ipynb).
+For interactive IP detection (to get the IP manually), see [Bundle/Bundle_IP_ACL_Setup.ipynb](Bundle/Bundle_IP_ACL_Setup.ipynb).
 
 ### Step 4: Generate and Deploy
 
@@ -409,7 +537,9 @@ databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --pro
 
 ### Step 5: Validate and Cleanup
 
-After successful migration, validate dashboards in the target workspace, then clean up IP whitelisting:
+After successful migration, validate dashboards in the target workspace, then clean up IP whitelisting.
+
+> **Note:** The cleanup script is a **bash shell script** - run from your **local terminal**, not Databricks UI.
 
 ```bash
 # After validating migration, remove IP from target allowlist
@@ -581,6 +711,6 @@ databricks bundle deploy -t dev --profile source-workspace
 
 ---
 
-**Version**: 2.4.0  
+**Version**: 2.5.0  
 **Last Updated**: February 2, 2026  
 **Status**: Production Ready
