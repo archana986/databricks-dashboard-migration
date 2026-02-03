@@ -71,7 +71,7 @@ fi
 SOURCE_PROFILE="${SOURCE_PROFILE:-source-workspace}"
 TARGET_PROFILE="${TARGET_PROFILE:-target-workspace}"
 BUNDLE_TARGET="${BUNDLE_TARGET:-dev}"
-VOLUME_BASE="${VOLUME_BASE:-/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration}"
+VOLUME_BASE="${VOLUME_BASE:-/Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration}"
 PROPAGATION_WAIT="${PROPAGATION_WAIT:-300}"
 DRY_RUN="${DRY_RUN:-false}"
 
@@ -383,7 +383,7 @@ except:
                         log_error "CLI command timed out after 3 minutes"
                         echo ""
                         log_info "Job may still have been triggered. Check workspace UI:"
-                        echo "   https://e2-demo-field-eng.cloud.databricks.com/#job/${JOB_ID}"
+                        echo "   Check your source workspace Workflows page for job ID: ${JOB_ID}"
                         exit 1
                     fi
                 else

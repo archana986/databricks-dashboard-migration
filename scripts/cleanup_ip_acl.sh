@@ -69,7 +69,7 @@ TARGET_PROFILE="${TARGET_PROFILE:-target-workspace}"
 CLUSTER_IP="${CLUSTER_IP:-}"
 FORCE="${FORCE:-false}"
 AUTO_DETECT="${AUTO_DETECT:-true}"
-VOLUME_BASE="${VOLUME_BASE:-/Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration}"
+VOLUME_BASE="${VOLUME_BASE:-/Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration}"
 
 ################################################################################
 # Helper Functions
@@ -228,7 +228,7 @@ confirm_cleanup() {
         echo ""
         echo "Please complete these validation steps first:"
         echo ""
-        echo "1. Open target workspace: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com"
+        echo "1. Open your target workspace in a browser"
         echo "2. Navigate to: SQL → Dashboards → /Shared/Migrated_Dashboards_V2"
         echo "3. Verify all dashboards are present and published"
         echo "4. Open a sample dashboard and run queries"

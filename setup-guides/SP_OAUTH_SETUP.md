@@ -368,8 +368,8 @@ databricks secrets put-secret migration_secrets sp_client_secret --profile sourc
 # Verify
 databricks secrets list-secrets migration_secrets --profile source-workspace
 
-# Test authentication
-databricks auth login --host https://target-workspace.cloud.databricks.com --client-id <sp-client-id> --client-secret <sp-client-secret>
+# Test authentication (replace with your target workspace URL)
+databricks auth login --host https://YOUR-TARGET-WORKSPACE.cloud.databricks.com --client-id <sp-client-id> --client-secret <sp-client-secret>
 ```
 
 ### Python Functions
@@ -396,6 +396,4 @@ variables:
 ## Related Documentation
 
 - [README.md](../README.md) - Main project documentation
-- [PREREQUISITES_AND_SETUP.md](PREREQUISITES_AND_SETUP.md) - Complete setup guide
-- [CLI_BEST_PRACTICES.md](CLI_BEST_PRACTICES.md) - CLI configuration
-- [IP_ACL_AUTOMATION_GUIDE.md](IP_ACL_AUTOMATION_GUIDE.md) - IP whitelisting (fallback)
+- [ip-detection/README.md](../ip-detection/README.md) - IP detection and whitelisting
