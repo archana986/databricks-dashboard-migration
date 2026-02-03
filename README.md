@@ -12,7 +12,7 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 - **Permission Migration**: Capture and apply ACLs
 - **Schedule Migration**: Capture and apply schedules/subscriptions
 - **Dual Deployment**: SDK Direct or Asset Bundle methods
-- **Cross-Workspace Auth**: PAT or Service Principal OAuth M2M
+- **Cross-Workspace Auth**: Service Principal OAuth (recommended) or PAT Token
 - **Runtime Overrides**: CLI parameters for dry_run, target_path, deployment_method
 - **Multi-Environment**: Dev, staging, prod configurations
 
@@ -23,7 +23,9 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 - Workspace Admin access on source and target workspaces
 - Unity Catalog volume for storing artifacts
 - SQL warehouse in target workspace
-- Cross-workspace authentication configured (PAT or Service Principal)
+- Cross-workspace authentication configured:
+  - **Recommended**: Service Principal with OAuth M2M
+  - **Alternative**: PAT Token (for quick dev/test)
 
 ## Getting Started - Two Options
 
@@ -73,7 +75,7 @@ databricks workspace list --profile target-workspace
 
 ## Cross-Workspace Authentication
 
-When deploying dashboards from source to target workspace, the source cluster needs to authenticate with the target workspace API. You have **two authentication options**:
+When deploying dashboards from source to target workspace, the source cluster needs to authenticate with the target workspace API.
 
 ### Why Cross-Workspace Auth is Required
 
@@ -100,64 +102,91 @@ The source workspace cluster must authenticate to the target workspace to:
 - Apply permissions
 - Create schedules and subscriptions
 
-### Authentication Flow Diagram
+### Authentication Options Comparison
+
+| Feature | Service Principal OAuth | PAT Token |
+|---------|------------------------|-----------|
+| **Recommendation** | **Recommended** | Fallback |
+| Setup Complexity | Medium | Simple |
+| Security | High (auto-rotating) | Lower (manual rotation) |
+| Audit Trail | SP identity (clean) | User identity |
+| Credential Lifetime | Configurable | Fixed expiry |
+| Production Ready | Yes | Dev/Test only |
+| IP Whitelisting | Required if ACL enabled | Required if ACL enabled |
+
+### Authentication Flow
 
 ```mermaid
 flowchart TD
-    subgraph auth_options [Choose Authentication Method]
-        PAT[PAT Token]
-        SP[Service Principal OAuth]
-    end
+    START[Choose Auth Method] --> DECIDE{Production Use?}
     
-    subgraph pat_flow [PAT Token Flow]
-        P1[Generate PAT in Target] --> P2[Store in Secret Scope]
-        P2 --> P3[Job reads secret]
-        P3 --> P4{Target has IP ACL?}
-        P4 -->|Yes| P5[Whitelist Source IP]
-        P4 -->|No| P6[Direct Access]
-        P5 --> P7[API Access Granted]
-        P6 --> P7
-    end
+    DECIDE -->|Yes| SP[Service Principal OAuth]
+    DECIDE -->|No/Quick Test| PAT[PAT Token]
     
-    subgraph sp_flow [SP OAuth Flow]
-        S1[Create Service Principal] --> S2[Add SP to Both Workspaces]
-        S2 --> S3[Generate OAuth Secret]
-        S3 --> S4[Store Client ID/Secret]
+    subgraph sp_flow [Recommended: Service Principal OAuth]
+        S1[1. Create SP in Account Console] --> S2[2. Add SP to Both Workspaces]
+        S2 --> S3[3. Generate OAuth Secret]
+        S3 --> S4[4. Store in Secret Scope]
         S4 --> S5{Target has IP ACL?}
-        S5 -->|Yes| S6[Whitelist Source IP]
-        S5 -->|No| S7[Direct Access]
-        S6 --> S8[API Access Granted]
+        S5 -->|Yes| S6[5. Whitelist Source IP]
+        S5 -->|No| S7[Skip IP Setup]
+        S6 --> S8[Ready to Migrate]
         S7 --> S8
     end
     
-    PAT --> pat_flow
+    subgraph pat_flow [Alternative: PAT Token]
+        P1[1. Generate PAT in Target] --> P2[2. Store in Secret Scope]
+        P2 --> P3{Target has IP ACL?}
+        P3 -->|Yes| P4[3. Whitelist Source IP]
+        P3 -->|No| P5[Skip IP Setup]
+        P4 --> P6[Ready to Migrate]
+        P5 --> P6
+    end
+    
     SP --> sp_flow
+    PAT --> pat_flow
 ```
 
-### Option A: PAT Token (Quick Setup)
+### Option 1: Service Principal OAuth M2M (Recommended)
 
-Best for: Development, quick testing, simple migrations.
+**Best for:** Production, automation, compliance, secure credential management.
+
+**Benefits:**
+- Dedicated service identity (not tied to a user)
+- Clean audit trail showing SP actions
+- Credentials can be auto-rotated
+- Follows Databricks security best practices
 
 ```bash
-# 1. Generate PAT in TARGET workspace
-#    User Settings → Developer → Access Tokens → Generate
+# Step 1: Create Service Principal in Account Console
+# Account Console → User Management → Service Principals → Add
 
-# 2. Create secret scope in SOURCE workspace
+# Step 2: Add SP to BOTH workspaces
+# Account Console → Workspaces → [workspace] → Permissions → Add SP
+# Repeat for source AND target workspace
+
+# Step 3: Generate OAuth Secret
+# Account Console → Service Principals → [your SP] → Secrets → Generate
+# IMPORTANT: Save the Client ID and Client Secret immediately
+
+# Step 4: Create secret scope and store credentials
 databricks secrets create-scope migration_secrets --profile source-workspace
 
-# 3. Store the PAT token
-databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
-# (Enter the PAT when prompted)
+databricks secrets put-secret migration_secrets sp_client_id --profile source-workspace
+# (Enter Client ID when prompted)
 
-# 4. Configure in databricks.yml
-#    auth_method: "pat"
-#    target_workspace_secret_scope: "migration_secrets"
+databricks secrets put-secret migration_secrets sp_client_secret --profile source-workspace
+# (Enter Client Secret when prompted)
+
+# Step 5: Configure in databricks.yml
+# Set these variables:
+#   auth_method: "sp_oauth"
+#   sp_secret_scope: "migration_secrets"
 ```
 
 **If target workspace has IP Access Lists enabled:**
 ```bash
-# Find your source cluster's egress IP
-# Run in a notebook on source workspace:
+# Find source cluster's egress IP (run in notebook on source workspace)
 import requests
 print(requests.get('https://api.ipify.org').text)
 
@@ -169,46 +198,33 @@ databricks ip-access-lists create \
   --profile target-workspace
 ```
 
-### Option B: Service Principal OAuth M2M (Production)
-
-Best for: Production, automation, audit compliance, credential rotation.
-
-```bash
-# 1. Create Service Principal in Account Console
-#    Account Console → User Management → Service Principals → Add
-
-# 2. Add SP to BOTH workspaces
-#    Account Console → Workspaces → [workspace] → Permissions → Add SP
-
-# 3. Generate OAuth Secret
-#    Account Console → Service Principals → [your SP] → Secrets → Generate
-#    Save the Client ID and Client Secret
-
-# 4. Create secret scope and store credentials
-databricks secrets create-scope migration_secrets --profile source-workspace
-databricks secrets put-secret migration_secrets sp_client_id --profile source-workspace
-# (Enter Client ID when prompted)
-databricks secrets put-secret migration_secrets sp_client_secret --profile source-workspace
-# (Enter Client Secret when prompted)
-
-# 5. Configure in databricks.yml
-#    auth_method: "sp_oauth"
-#    sp_secret_scope: "migration_secrets"
-```
-
-**If target workspace has IP Access Lists enabled:** Same IP whitelisting steps as PAT.
-
 See `checklater/SP_OAUTH_SETUP.md` for detailed Service Principal setup guide.
 
-### Comparison
+### Option 2: PAT Token (Alternative - Quick Setup)
 
-| Feature | PAT Token | Service Principal OAuth |
-|---------|-----------|------------------------|
-| Setup Complexity | Simple | Medium |
-| Security | Rotating required | Auto-rotating available |
-| Audit Trail | User identity | SP identity (cleaner) |
-| Best For | Dev/Test | Production |
-| IP Whitelisting | Required if ACL enabled | Required if ACL enabled |
+**Best for:** Development, quick testing, when SP setup is not feasible.
+
+**Note:** Use this only when Service Principal setup is not possible. PAT tokens are tied to a user account and require manual rotation.
+
+```bash
+# Step 1: Generate PAT in TARGET workspace
+# User Settings → Developer → Access Tokens → Generate
+# Set appropriate expiry (recommend 90 days max)
+
+# Step 2: Create secret scope in SOURCE workspace
+databricks secrets create-scope migration_secrets --profile source-workspace
+
+# Step 3: Store the PAT token
+databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
+# (Enter the PAT when prompted)
+
+# Step 4: Configure in databricks.yml
+# Set these variables:
+#   auth_method: "pat"
+#   target_workspace_secret_scope: "migration_secrets"
+```
+
+**If target workspace has IP Access Lists enabled:** Same IP whitelisting steps as SP OAuth above.
 
 ## Migration Flow
 
@@ -232,8 +248,8 @@ flowchart TD
         H -->|Generate| J[Schedules CSV]
     end
     
-    subgraph auth [Cross-Workspace Auth Required]
-        K[Configure PAT or SP OAuth]
+    subgraph auth [Step 3.5: Cross-Workspace Auth]
+        K[Configure SP OAuth or PAT]
         L[Whitelist IP if needed]
     end
     
@@ -270,7 +286,14 @@ targets:
       source_workspace_url: https://source-workspace.cloud.databricks.com
       target_workspace_url: https://target-workspace.cloud.databricks.com
       warehouse_id: "your_warehouse_id"  # 16-char hex ID
-      auth_method: "pat"  # or "sp_oauth"
+      
+      # Authentication (choose one)
+      auth_method: "sp_oauth"              # Recommended
+      sp_secret_scope: "migration_secrets"
+      
+      # OR for quick dev/test:
+      # auth_method: "pat"
+      # target_workspace_secret_scope: "migration_secrets"
 ```
 
 ### 2. Create Catalog Mapping CSV
@@ -298,10 +321,9 @@ databricks bundle run inventory_generation -t dev --profile source-workspace
 # Step 3: Export & transform
 databricks bundle run export_transform -t dev --profile source-workspace
 
-# ⚠️  BEFORE STEP 4: Ensure cross-workspace auth is configured!
-# - PAT token stored in secret scope, OR
-# - SP OAuth credentials stored in secret scope
-# - IP whitelisted if target has IP ACLs enabled
+# Step 3.5: Configure cross-workspace auth (see section above)
+# - Set up SP OAuth (recommended) or PAT token
+# - Whitelist IP if target has IP ACLs
 
 # Step 4: Deploy (dry run first - safe)
 databricks bundle run generate_deploy -t dev --profile source-workspace
@@ -342,21 +364,13 @@ Exports approved dashboards and applies catalog transformations.
 databricks bundle run export_transform -t dev --profile source-workspace
 ```
 
-**What it does:**
-- Exports dashboard JSONs from source
-- Captures permissions to `all_permissions.csv`
-- Captures schedules to `all_schedules.csv`
-- Applies CSV mappings to transform catalog references
-- Saves to `exported/` and `transformed/` directories
-
 ### Step 3.5: Configure Cross-Workspace Authentication
 
 **CRITICAL: Before Step 4, ensure authentication is configured!**
 
-See [Cross-Workspace Authentication](#cross-workspace-authentication) section above for:
-- PAT Token setup, OR
-- Service Principal OAuth setup
-- IP whitelisting (if target has IP ACLs)
+Choose one:
+- **Recommended**: Service Principal OAuth M2M (see [Option 1](#option-1-service-principal-oauth-m2m-recommended))
+- **Alternative**: PAT Token (see [Option 2](#option-2-pat-token-alternative---quick-setup))
 
 ### Step 4: Generate and Deploy
 
@@ -451,9 +465,9 @@ Catalog Migration/
 | `source_workspace_url` | Source workspace URL |
 | `target_workspace_url` | Target workspace URL |
 | `warehouse_id` | Target warehouse ID (16-char hex) |
-| `auth_method` | `pat` or `sp_oauth` |
-| `target_workspace_secret_scope` | Secret scope for PAT |
-| `sp_secret_scope` | Secret scope for SP OAuth |
+| `auth_method` | `sp_oauth` (recommended) or `pat` |
+| `sp_secret_scope` | Secret scope for SP OAuth credentials |
+| `target_workspace_secret_scope` | Secret scope for PAT token |
 | `transformation_enabled` | Enable catalog mapping (`true`/`false`) |
 | `mapping_csv_path` | Path to mapping CSV |
 | `apply_permissions` | Apply ACLs to target (`true`/`false`) |
@@ -468,12 +482,12 @@ Catalog Migration/
 **Error**: `403 Invalid access token` or `401 Unauthorized`
 
 **Solution**:
-1. Verify PAT/SP credentials are stored correctly:
+1. Verify credentials are stored correctly:
    ```bash
    databricks secrets list-secrets migration_secrets --profile source-workspace
    ```
-2. Verify PAT hasn't expired
-3. For SP OAuth, verify SP is added to target workspace
+2. For PAT: Verify token hasn't expired
+3. For SP OAuth: Verify SP is added to target workspace with correct permissions
 
 ### IP Whitelist Errors
 
@@ -514,6 +528,6 @@ databricks bundle deploy -t dev --profile source-workspace
 
 ---
 
-**Version**: 2.2.0  
+**Version**: 2.3.0  
 **Last Updated**: February 2, 2026  
 **Status**: Production Ready
