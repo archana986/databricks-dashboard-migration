@@ -715,6 +715,12 @@ databricks bundle deploy -t dev --profile source-workspace
 
 ---
 
-**Version**: 2.6.0  
-**Last Updated**: February 2, 2026  
+## Resources
+
+- [Why This Toolkit vs Terraform](WHY_THIS_TOOLKIT.md) - Comparison with Terraform and scenarios covered
+
+---
+
+**Version**: 2.7.0  
+**Last Updated**: February 3, 2026  
 **Status**: Production Ready
