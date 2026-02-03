@@ -12,6 +12,7 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 - **Permission Migration**: Capture and apply ACLs
 - **Schedule Migration**: Capture and apply schedules/subscriptions
 - **Dual Deployment**: SDK Direct or Asset Bundle methods
+- **Cross-Workspace Auth**: PAT or Service Principal OAuth M2M
 - **Runtime Overrides**: CLI parameters for dry_run, target_path, deployment_method
 - **Multi-Environment**: Dev, staging, prod configurations
 
@@ -22,9 +23,39 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 - Workspace Admin access on source and target workspaces
 - Unity Catalog volume for storing artifacts
 - SQL warehouse in target workspace
-- Secret scope with PAT token for cross-workspace auth
+- Cross-workspace authentication configured (PAT or Service Principal)
 
-### Quick CLI Setup
+## Getting Started - Two Options
+
+### Option 1: CLI Execution (Recommended for Automation)
+
+Clone the repository and run from your local machine:
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/dashboard-migration.git
+
+# Navigate to the migration folder
+cd dashboard-migration/Customer-Folder/Catalog\ Migration
+
+# Configure databricks.yml with your workspace details
+# Then deploy and run (see Quick Start section below)
+```
+
+**Folder placement:** Place the cloned folder anywhere on your machine. All paths are relative to `databricks.yml`.
+
+### Option 2: Interactive Notebook Execution
+
+For interactive execution in the Databricks UI:
+
+1. Clone the repo to your Databricks Workspace (Repos → Add Repo)
+2. Open each notebook in sequence (Bundle_01 → 02 → 03 → 04)
+3. Configure widgets/parameters in each notebook
+4. Run cells interactively
+
+**Best for:** First-time users, debugging, understanding the workflow.
+
+## Quick CLI Setup
 
 ```bash
 # Install CLI
@@ -38,11 +69,146 @@ databricks configure --profile target-workspace
 # Test profiles
 databricks workspace list --profile source-workspace
 databricks workspace list --profile target-workspace
-
-# Create secret scope and store target workspace PAT
-databricks secrets create-scope migration_secrets --profile source-workspace
-databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
 ```
+
+## Cross-Workspace Authentication
+
+When deploying dashboards from source to target workspace, the source cluster needs to authenticate with the target workspace API. You have **two authentication options**:
+
+### Why Cross-Workspace Auth is Required
+
+```mermaid
+flowchart LR
+    subgraph source [Source Workspace]
+        A[Migration Job] -->|API Call| B[Cluster/Serverless]
+    end
+    
+    subgraph target [Target Workspace]
+        C[Dashboards API]
+        D[Permissions API]
+    end
+    
+    B -->|Needs Auth| C
+    B -->|Needs Auth| D
+    
+    style source fill:#e1f5ff
+    style target fill:#e7f5e1
+```
+
+The source workspace cluster must authenticate to the target workspace to:
+- Create dashboards via API
+- Apply permissions
+- Create schedules and subscriptions
+
+### Authentication Flow Diagram
+
+```mermaid
+flowchart TD
+    subgraph auth_options [Choose Authentication Method]
+        PAT[PAT Token]
+        SP[Service Principal OAuth]
+    end
+    
+    subgraph pat_flow [PAT Token Flow]
+        P1[Generate PAT in Target] --> P2[Store in Secret Scope]
+        P2 --> P3[Job reads secret]
+        P3 --> P4{Target has IP ACL?}
+        P4 -->|Yes| P5[Whitelist Source IP]
+        P4 -->|No| P6[Direct Access]
+        P5 --> P7[API Access Granted]
+        P6 --> P7
+    end
+    
+    subgraph sp_flow [SP OAuth Flow]
+        S1[Create Service Principal] --> S2[Add SP to Both Workspaces]
+        S2 --> S3[Generate OAuth Secret]
+        S3 --> S4[Store Client ID/Secret]
+        S4 --> S5{Target has IP ACL?}
+        S5 -->|Yes| S6[Whitelist Source IP]
+        S5 -->|No| S7[Direct Access]
+        S6 --> S8[API Access Granted]
+        S7 --> S8
+    end
+    
+    PAT --> pat_flow
+    SP --> sp_flow
+```
+
+### Option A: PAT Token (Quick Setup)
+
+Best for: Development, quick testing, simple migrations.
+
+```bash
+# 1. Generate PAT in TARGET workspace
+#    User Settings → Developer → Access Tokens → Generate
+
+# 2. Create secret scope in SOURCE workspace
+databricks secrets create-scope migration_secrets --profile source-workspace
+
+# 3. Store the PAT token
+databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
+# (Enter the PAT when prompted)
+
+# 4. Configure in databricks.yml
+#    auth_method: "pat"
+#    target_workspace_secret_scope: "migration_secrets"
+```
+
+**If target workspace has IP Access Lists enabled:**
+```bash
+# Find your source cluster's egress IP
+# Run in a notebook on source workspace:
+import requests
+print(requests.get('https://api.ipify.org').text)
+
+# Add to target workspace IP allowlist
+databricks ip-access-lists create \
+  --label "source-workspace-migration" \
+  --list-type ALLOW \
+  --ip-addresses "YOUR.IP.HERE/32" \
+  --profile target-workspace
+```
+
+### Option B: Service Principal OAuth M2M (Production)
+
+Best for: Production, automation, audit compliance, credential rotation.
+
+```bash
+# 1. Create Service Principal in Account Console
+#    Account Console → User Management → Service Principals → Add
+
+# 2. Add SP to BOTH workspaces
+#    Account Console → Workspaces → [workspace] → Permissions → Add SP
+
+# 3. Generate OAuth Secret
+#    Account Console → Service Principals → [your SP] → Secrets → Generate
+#    Save the Client ID and Client Secret
+
+# 4. Create secret scope and store credentials
+databricks secrets create-scope migration_secrets --profile source-workspace
+databricks secrets put-secret migration_secrets sp_client_id --profile source-workspace
+# (Enter Client ID when prompted)
+databricks secrets put-secret migration_secrets sp_client_secret --profile source-workspace
+# (Enter Client Secret when prompted)
+
+# 5. Configure in databricks.yml
+#    auth_method: "sp_oauth"
+#    sp_secret_scope: "migration_secrets"
+```
+
+**If target workspace has IP Access Lists enabled:** Same IP whitelisting steps as PAT.
+
+See `checklater/SP_OAUTH_SETUP.md` for detailed Service Principal setup guide.
+
+### Comparison
+
+| Feature | PAT Token | Service Principal OAuth |
+|---------|-----------|------------------------|
+| Setup Complexity | Simple | Medium |
+| Security | Rotating required | Auto-rotating available |
+| Audit Trail | User identity | SP identity (cleaner) |
+| Best For | Dev/Test | Production |
+| IP Whitelisting | Required if ACL enabled | Required if ACL enabled |
 
 ## Migration Flow
 
@@ -66,18 +232,30 @@ flowchart TD
         H -->|Generate| J[Schedules CSV]
     end
     
-    subgraph step4 [Step 4: Deploy]
-        H --> K{Method?}
-        K -->|SDK Direct| L[API Deployment]
-        K -->|Asset Bundle| M[Bundle Deployment]
-        L --> N[Target Workspace]
-        M --> N
+    subgraph auth [Cross-Workspace Auth Required]
+        K[Configure PAT or SP OAuth]
+        L[Whitelist IP if needed]
     end
+    
+    subgraph step4 [Step 4: Deploy]
+        H --> M{Method?}
+        M -->|SDK Direct| N[API Deployment]
+        M -->|Asset Bundle| O[Bundle Deployment]
+        N --> P[Target Workspace]
+        O --> P
+    end
+    
+    step3 --> auth
+    auth --> step4
 ```
 
 ## Quick Start
 
 ### 1. Configure Environment
+
+```bash
+cd "Customer-Folder/Catalog Migration"
+```
 
 Edit `databricks.yml` target variables:
 
@@ -92,6 +270,7 @@ targets:
       source_workspace_url: https://source-workspace.cloud.databricks.com
       target_workspace_url: https://target-workspace.cloud.databricks.com
       warehouse_id: "your_warehouse_id"  # 16-char hex ID
+      auth_method: "pat"  # or "sp_oauth"
 ```
 
 ### 2. Create Catalog Mapping CSV
@@ -107,8 +286,6 @@ dev_catalog,bronze,,prod_catalog,gold,,,
 ### 3. Run Migration
 
 ```bash
-cd "Customer-Work/Catalog Migration"
-
 # Deploy bundle (one-time setup)
 databricks bundle deploy -t dev --profile source-workspace
 
@@ -120,6 +297,11 @@ databricks bundle run inventory_generation -t dev --profile source-workspace
 
 # Step 3: Export & transform
 databricks bundle run export_transform -t dev --profile source-workspace
+
+# ⚠️  BEFORE STEP 4: Ensure cross-workspace auth is configured!
+# - PAT token stored in secret scope, OR
+# - SP OAuth credentials stored in secret scope
+# - IP whitelisted if target has IP ACLs enabled
 
 # Step 4: Deploy (dry run first - safe)
 databricks bundle run generate_deploy -t dev --profile source-workspace
@@ -167,6 +349,15 @@ databricks bundle run export_transform -t dev --profile source-workspace
 - Applies CSV mappings to transform catalog references
 - Saves to `exported/` and `transformed/` directories
 
+### Step 3.5: Configure Cross-Workspace Authentication
+
+**CRITICAL: Before Step 4, ensure authentication is configured!**
+
+See [Cross-Workspace Authentication](#cross-workspace-authentication) section above for:
+- PAT Token setup, OR
+- Service Principal OAuth setup
+- IP whitelisting (if target has IP ACLs)
+
 ### Step 4: Generate and Deploy
 
 **Notebook**: `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
@@ -203,11 +394,6 @@ databricks bundle run generate_deploy -t dev \
 databricks bundle run generate_deploy -t dev \
   --params "dry_run_mode=false,deployment_method=asset_bundle" \
   --profile source-workspace
-
-# Multiple overrides
-databricks bundle run generate_deploy -t dev \
-  --params "dry_run_mode=false,deployment_method=asset_bundle,target_parent_path=/Shared/Test" \
-  --profile source-workspace
 ```
 
 ## Deployment Methods
@@ -232,23 +418,26 @@ Catalog Migration/
 │   ├── Bundle_02_Review_and_Approve_Inventory.ipynb
 │   ├── Bundle_03_Export_and_Transform.ipynb
 │   └── Bundle_04_Generate_and_Deploy.ipynb
-└── helpers/
-    ├── __init__.py
-    ├── auth.py                       # Workspace authentication
-    ├── bundle_generator.py           # Asset bundle generation
-    ├── config_loader.py              # Configuration utilities
-    ├── config_validator.py           # Pre-flight validation
-    ├── dbutils_helper.py             # dbutils wrapper
-    ├── deployment_package.py         # Deployment data structures
-    ├── discovery.py                  # Dashboard discovery
-    ├── export.py                     # Dashboard export
-    ├── ip_acl_manager.py             # IP whitelist management
-    ├── permissions.py                # ACL management
-    ├── schedules.py                  # Schedule management
-    ├── sdk_deployer.py               # SDK deployment
-    ├── sp_oauth_auth.py              # Service Principal auth
-    ├── transform.py                  # Catalog transformation
-    └── volume_utils.py               # UC volume operations
+├── helpers/
+│   ├── __init__.py
+│   ├── auth.py                       # Workspace authentication
+│   ├── bundle_generator.py           # Asset bundle generation
+│   ├── config_loader.py              # Configuration utilities
+│   ├── config_validator.py           # Pre-flight validation
+│   ├── dbutils_helper.py             # dbutils wrapper
+│   ├── deployment_package.py         # Deployment data structures
+│   ├── discovery.py                  # Dashboard discovery
+│   ├── export.py                     # Dashboard export
+│   ├── ip_acl_manager.py             # IP whitelist management
+│   ├── permissions.py                # ACL management
+│   ├── schedules.py                  # Schedule management
+│   ├── sdk_deployer.py               # SDK deployment
+│   ├── sp_oauth_auth.py              # Service Principal auth
+│   ├── transform.py                  # Catalog transformation
+│   └── volume_utils.py               # UC volume operations
+└── checklater/                       # Deferred testing items
+    ├── Setup_Migration_Secrets.ipynb
+    └── SP_OAUTH_SETUP.md
 ```
 
 ## Configuration Reference
@@ -262,6 +451,9 @@ Catalog Migration/
 | `source_workspace_url` | Source workspace URL |
 | `target_workspace_url` | Target workspace URL |
 | `warehouse_id` | Target warehouse ID (16-char hex) |
+| `auth_method` | `pat` or `sp_oauth` |
+| `target_workspace_secret_scope` | Secret scope for PAT |
+| `sp_secret_scope` | Secret scope for SP OAuth |
 | `transformation_enabled` | Enable catalog mapping (`true`/`false`) |
 | `mapping_csv_path` | Path to mapping CSV |
 | `apply_permissions` | Apply ACLs to target (`true`/`false`) |
@@ -269,29 +461,34 @@ Catalog Migration/
 | `deployment_method` | `sdk_direct` or `asset_bundle` |
 | `dry_run_mode` | Preview without deploying (`true`/`false`) |
 
-## Cross-Workspace Authentication
-
-### PAT Token (Recommended for Quick Setup)
-
-1. Generate PAT in **target** workspace (User Settings → Developer → Access Tokens)
-2. Store in secret scope on **source** workspace:
-   ```bash
-   databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
-   ```
-
-### Service Principal OAuth (For Production)
-
-See `checklater/SP_OAUTH_SETUP.md` for detailed setup instructions.
-
 ## Troubleshooting
 
-### Permission Errors
-```bash
-# Re-authenticate
-databricks auth login --host https://your-workspace.cloud.databricks.com
-```
+### Cross-Workspace Authentication Errors
+
+**Error**: `403 Invalid access token` or `401 Unauthorized`
+
+**Solution**:
+1. Verify PAT/SP credentials are stored correctly:
+   ```bash
+   databricks secrets list-secrets migration_secrets --profile source-workspace
+   ```
+2. Verify PAT hasn't expired
+3. For SP OAuth, verify SP is added to target workspace
+
+### IP Whitelist Errors
+
+**Error**: `403 IP not allowed` or connection timeout
+
+**Solution**:
+1. Get source cluster IP:
+   ```python
+   import requests
+   print(requests.get('https://api.ipify.org').text)
+   ```
+2. Add to target workspace IP allowlist
 
 ### Bundle Deploy Errors
+
 ```bash
 # Validate bundle
 databricks bundle validate -t dev --profile source-workspace
@@ -299,9 +496,6 @@ databricks bundle validate -t dev --profile source-workspace
 # Force redeploy
 databricks bundle deploy -t dev --profile source-workspace
 ```
-
-### Job Run Errors
-Check the job run URL in the output for detailed error logs.
 
 ## What Gets Migrated
 
@@ -320,6 +514,6 @@ Check the job run URL in the output for detailed error logs.
 
 ---
 
-**Version**: 2.1.0  
+**Version**: 2.2.0  
 **Last Updated**: February 2, 2026  
 **Status**: Production Ready
