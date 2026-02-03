@@ -204,6 +204,10 @@ resources:
     inventory_generation:
       name: "[Migration] Step 1 - Inventory Generation"
       description: "Generate dashboard inventory. After completion, manually run Step 2 in Databricks UI."
+      tags:
+        project: "dashboard-migration"
+        step: "1-inventory"
+        workflow: "lakeview-migration"
       
       tasks:
         - task_key: generate_inventory
@@ -252,6 +256,10 @@ resources:
     export_transform:
       name: "[Migration] Step 3 - Export & Transform"
       description: "Export and transform dashboards. Requires Step 2 (manual review) to be completed first."
+      tags:
+        project: "dashboard-migration"
+        step: "3-export-transform"
+        workflow: "lakeview-migration"
       
       tasks:
         - task_key: export_and_transform
@@ -322,6 +330,10 @@ resources:
     generate_deploy:
       name: "[Migration] Step 4 - Generate & Deploy"
       description: "Generate asset bundles and deploy to target. Final step."
+      tags:
+        project: "dashboard-migration"
+        step: "4-deploy"
+        workflow: "lakeview-migration"
       
       # Job parameters - can be overridden at runtime via: --params key=value
       # Examples:
