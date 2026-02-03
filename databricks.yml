@@ -74,14 +74,18 @@ variables:
   
   target_parent_path:
     description: Target workspace folder path for migrated dashboards
-    default: /Shared/Migrated_Dashboards
+    default: /Shared/Migrated_Dashboards_V2
   
   # ──────────────────────────────────────────────────────────────────────────
   # WAREHOUSE CONFIGURATION
   # ──────────────────────────────────────────────────────────────────────────
   warehouse_name:
-    description: SQL warehouse name in target workspace for dashboard execution
-    default: ak-migration
+    description: SQL warehouse name in target workspace for dashboard execution (used if warehouse_id not provided)
+    default: Shared Endpoint  # Update this to match your target workspace warehouse name
+  
+  warehouse_id:
+    description: SQL warehouse ID in target workspace (preferred - skips name resolution)
+    default: ""  # Leave empty to use warehouse_name instead
   
   # ──────────────────────────────────────────────────────────────────────────
   # INVENTORY OPTIONS
@@ -117,11 +121,80 @@ variables:
     default: "true"
   
   # ──────────────────────────────────────────────────────────────────────────
+  # SCHEDULE & SUBSCRIPTION OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  capture_schedules:
+    description: Whether to export schedules and subscriptions from source dashboards (true/false)
+    default: "true"
+  
+  apply_schedules:
+    description: Whether to apply schedules and subscriptions to target dashboards (true/false)
+    default: "true"
+  
+  schedules_dry_run:
+    description: If true simulates schedule application without actually creating (true/false)
+    default: "false"
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # ARCHIVE OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  archive_old_files:
+    description: Whether to archive old transformed/exported files before new export (true/false)
+    default: "true"
+  
+  archive_min_age_minutes:
+    description: Only archive files older than this many minutes (prevents archiving current run)
+    default: "5"
+  
+  force_archive_all:
+    description: Archive ALL files regardless of age (use to clean up old runs) (true/false)
+    default: "false"
+  
+  skip_duplicate_check:
+    description: Skip checking for existing dashboards (faster but may create duplicates) (true/false)
+    default: "false"
+  
+  dashboard_name_suffix:
+    description: Optional suffix to append to dashboard names (use to avoid conflicts with orphaned dashboards)
+    default: ""
+  
+  # ──────────────────────────────────────────────────────────────────────────
   # BUNDLE OPTIONS
   # ──────────────────────────────────────────────────────────────────────────
   embed_credentials:
     description: Whether to embed credentials in deployed dashboards (true/false)
     default: "true"
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEPLOYMENT METHOD OPTIONS
+  # ──────────────────────────────────────────────────────────────────────────
+  deployment_method:
+    description: "Deployment method: asset_bundle (bundle + SDK for schedules) or sdk_direct (all via SDK)"
+    default: "sdk_direct"
+  
+  dry_run_mode:
+    description: Preview deployment without creating resources (true/false)
+    default: "false"  # Override in target-specific variables for safety
+  
+  
+  skip_ip_check:
+    description: Skip IP whitelist check before deployment (NOT recommended for production) (true/false)
+    default: "false"
+  
+  target_workspace_secret_scope:
+    description: Secret scope containing target workspace credentials (for cross-workspace auth)
+    default: "migration_secrets"
+  
+  # ──────────────────────────────────────────────────────────────────────────
+  # CROSS-WORKSPACE AUTHENTICATION
+  # ──────────────────────────────────────────────────────────────────────────
+  auth_method:
+    description: "Authentication method for target workspace: pat (PAT token) or sp_oauth (Service Principal OAuth M2M)"
+    default: "pat"  # Options: "pat", "sp_oauth"
+  
+  sp_secret_scope:
+    description: "Secret scope containing SP OAuth credentials (sp_client_id, sp_client_secret). Used when auth_method=sp_oauth"
+    default: "migration_secrets"
 
 resources:
   jobs:
@@ -156,11 +229,14 @@ resources:
           
           # ALTERNATIVE: Standard cluster with Photon (Uncomment if serverless not working)
           # new_cluster:
-          #   spark_version: "15.4.x-scala2.12"  # Use 15.4 LTS (most compatible)
-          #   node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
-          #   num_workers: 2                      # Adjust based on workload
-          #   runtime_engine: PHOTON              # Recommended for performance
-          #   data_security_mode: USER_ISOLATION
+          #   spark_version: "17.3.x-scala2.13"  # Latest LTS - Spark 4.0 uses Scala 2.13
+          #   node_type_id: "i3.xlarge"          # AWS: i3.xlarge, Azure: Standard_D4s_v3, GCP: n1-standard-4
+          #   num_workers: 1
+          #   runtime_engine: PHOTON              # Photon engine for performance
+          #   data_security_mode: SINGLE_USER     # Single user mode
+          #   single_user_name: ${workspace.current_user.userName}
+          #   autotermination_minutes: 60
+          #   enable_elastic_disk: true
           #   spark_conf:
           #     spark.databricks.delta.preview.enabled: "true"
       
@@ -196,6 +272,11 @@ resources:
               transformation_enabled: ${var.transformation_enabled}
               mapping_csv_path: ${var.mapping_csv_path}
               capture_permissions: ${var.capture_permissions}
+              capture_schedules: ${var.capture_schedules}
+              # Archive options
+              archive_old_files: ${var.archive_old_files}
+              archive_min_age_minutes: ${var.archive_min_age_minutes}
+              force_archive_all: ${var.force_archive_all}
           
           # SERVERLESS COMPUTE (Default - Recommended)
           # No cluster definition - uses Databricks serverless by default
@@ -216,17 +297,22 @@ resources:
           #       package: "databricks-sdk>=0.18.0"
           #   - pypi:
           #       package: "pyyaml>=6.0"
+          #   - pypi:
+          #       package: "protobuf>=5.26.1,<6.0.0"
       
       # ALTERNATIVE: Standard cluster configuration (Uncomment if serverless not suitable)
       # NOTE: Also uncomment the libraries section above when using standard cluster
       # job_clusters:
       #   - job_cluster_key: export_cluster
       #     new_cluster:
-      #       spark_version: "15.4.x-scala2.12"  # Current LTS - change to latest available
-      #       node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
-      #       num_workers: 2                      # Adjust based on workload
-      #       runtime_engine: PHOTON              # Recommended for performance
-      #       data_security_mode: USER_ISOLATION
+      #       spark_version: "17.3.x-scala2.13"  # Latest LTS - Spark 4.0 uses Scala 2.13
+      #       node_type_id: "i3.xlarge"          # AWS: i3.xlarge, Azure: Standard_DS3_v2, GCP: n1-standard-4
+      #       num_workers: 1
+      #       runtime_engine: PHOTON              # Photon engine for 3-5x performance boost
+      #       data_security_mode: SINGLE_USER     # Single user mode
+      #       single_user_name: ${workspace.current_user.userName}
+      #       autotermination_minutes: 60
+      #       enable_elastic_disk: true
       #       spark_conf:
       #         spark.databricks.delta.preview.enabled: "true"
     
@@ -236,6 +322,19 @@ resources:
     generate_deploy:
       name: "[Migration] Step 4 - Generate & Deploy"
       description: "Generate asset bundles and deploy to target. Final step."
+      
+      # Job parameters - can be overridden at runtime via: --params key=value
+      # Examples:
+      #   --params dry_run_mode=false
+      #   --params target_parent_path=/Shared/Custom/Path
+      #   --params deployment_method=asset_bundle
+      parameters:
+        - name: dry_run_mode
+          default: ${var.dry_run_mode}
+        - name: target_parent_path
+          default: ${var.target_parent_path}
+        - name: deployment_method
+          default: ${var.deployment_method}
       
       tasks:
         - task_key: generate_and_deploy
@@ -251,51 +350,63 @@ resources:
               exported_path: ${var.exported_path}
               transformed_path: ${var.transformed_path}
               bundles_path: ${var.bundles_path}
-              target_parent_path: ${var.target_parent_path}
-              # Warehouse
+              target_parent_path: "{{job.parameters.target_parent_path}}"
+              # Warehouse (warehouse_id preferred, warehouse_name is fallback)
+              warehouse_id: ${var.warehouse_id}
               warehouse_name: ${var.warehouse_name}
               # Bundle options
               bundle_name: ${bundle.name}
               # Options
               apply_permissions: ${var.apply_permissions}
               permissions_dry_run: ${var.permissions_dry_run}
+              apply_schedules: ${var.apply_schedules}
+              schedules_dry_run: ${var.schedules_dry_run}
               embed_credentials: ${var.embed_credentials}
+              # Deployment method
+              deployment_method: "{{job.parameters.deployment_method}}"
+              dry_run_mode: "{{job.parameters.dry_run_mode}}"
+              target_workspace_secret_scope: ${var.target_workspace_secret_scope}
+              skip_duplicate_check: ${var.skip_duplicate_check}
+              # Cross-workspace authentication
+              auth_method: ${var.auth_method}
+              sp_secret_scope: ${var.sp_secret_scope}
           
-          # SERVERLESS COMPUTE (Default - Recommended)
-          # No cluster definition - uses Databricks serverless by default
-          # Benefits:
-          # - Faster startup (no cluster provisioning)
-          # - Auto-scaling based on workload
-          # - No cluster management needed
-          # - Ideal for bundle generation and deployment operations
-          # NOTE: Libraries are installed in the notebook via %pip install
+          # STANDARD CLUSTER (Required for cross-workspace network access)
+          # Serverless compute has network restrictions that prevent connecting to other workspaces
+          job_cluster_key: deploy_cluster
           
-          # ALTERNATIVE: Standard cluster (Uncomment if needed)
-          # Uncomment the job_cluster_key line below and the job_clusters section at bottom of this job
-          # job_cluster_key: deploy_cluster
-          
-          # Libraries (only used with standard clusters, not serverless)
-          # libraries:
-          #   - pypi:
-          #       package: "databricks-sdk>=0.18.0"
-          #   - pypi:
-          #       package: "pyyaml>=6.0"
-          #   - pypi:
-          #       package: "databricks-cli>=0.18.0"
+          # Libraries required for standard cluster
+          libraries:
+            - pypi:
+                package: "databricks-sdk>=0.18.0"
+            - pypi:
+                package: "pyyaml>=6.0"
+            - pypi:
+                package: "pandas"
+            - pypi:
+                package: "numpy<2"
+            - pypi:
+                package: "protobuf>=5.26.1,<6.0.0"  # Fix: Constrain protobuf to avoid conflicts
       
-      # ALTERNATIVE: Standard cluster configuration (Uncomment if serverless not suitable)
-      # NOTE: Also uncomment the libraries section above when using standard cluster
-      # job_clusters:
-      #   - job_cluster_key: deploy_cluster
-      #     new_cluster:
-      #       spark_version: "15.4.x-scala2.12"  # Current LTS - change to latest available
-      #       node_type_id: "i3.xlarge"          # Adjust based on your cloud provider
-      #       num_workers: 2                      # Adjust based on workload
-      #       runtime_engine: PHOTON              # Recommended for performance
-      #       data_security_mode: USER_ISOLATION
-      #       spark_conf:
-      #         spark.databricks.delta.preview.enabled: "true"
-
+      # Standard cluster configuration (Required for cross-workspace network access + UC volume access)
+      # Serverless has network restrictions; standard cluster provides full connectivity and UC access
+      job_clusters:
+        - job_cluster_key: deploy_cluster
+          new_cluster:
+            spark_version: "17.3.x-scala2.13"  # Latest LTS - Spark 4.0 uses Scala 2.13
+            node_type_id: "i3.xlarge"          # AWS: i3.xlarge | Azure: Standard_DS3_v2 | GCP: n1-standard-4
+            num_workers: 1                      # 1 worker (per cluster policy)
+            autotermination_minutes: 60
+            runtime_engine: STANDARD            # Standard runtime (Photon not needed for API operations)
+            data_security_mode: SINGLE_USER     # Single user mode for simplicity
+            single_user_name: ${workspace.current_user.userName}
+            enable_elastic_disk: true
+            custom_tags:
+              env: "dev"
+              owner: ${workspace.current_user.userName}
+              Purpose: "CrossWorkspaceMigration"
+    
+    
 # ============================================================================
 # DEPLOYMENT TARGETS
 # ============================================================================
@@ -303,23 +414,44 @@ resources:
 # Customize these for your workspaces
 targets:
   # ──────────────────────────────────────────────────────────────────────────
-  # DEV ENVIRONMENT
+  # DEV: Development Environment
+  # ──────────────────────────────────────────────────────────────────────────
+  # DESIGN: All configuration in YAML (single source of truth)
+  # ONLY dry_run_mode is CLI-overridable for safety
+  #
+  # USAGE:
+  #   Dry run (safe default): databricks bundle run generate_deploy -t dev --profile source-workspace
+  #   Live deploy:            databricks bundle run generate_deploy -t dev --var="dry_run_mode=false" --profile source-workspace
+  #
+  # To change deployment_method or auth_method: Edit this YAML and redeploy bundle
   # ──────────────────────────────────────────────────────────────────────────
   dev:
     mode: development
     workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com  # CHANGE THIS to your dev workspace URL
+      host: https://e2-demo-field-eng.cloud.databricks.com
     
     variables:
-      # Core configuration - CUSTOMIZE THESE
-      catalog: archana_krish_fe_dsa  # Source catalog in dev
-      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration  # Dev volume path
-      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # Usually same as host
-      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com  # Target workspace
-      warehouse_name: ak-migration  # SQL warehouse name in target
+      # ════════════════════════════════════════════════════════════════════════
+      # WORKSPACE CONFIGURATION (Edit these for your environment)
+      # ════════════════════════════════════════════════════════════════════════
+      catalog: archana_krish_fe_dsa
+      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
+      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com
+      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com
+      warehouse_id: 53af68e7019d2b78
+      warehouse_name: ak-migration
       
-      # Dev-specific overrides (optional)
-      # permissions_dry_run: "true"  # Keep true for testing
+      # ════════════════════════════════════════════════════════════════════════
+      # DEPLOYMENT CONFIGURATION (Edit to change behavior, then redeploy bundle)
+      # ════════════════════════════════════════════════════════════════════════
+      deployment_method: "asset_bundle"   # Options: "sdk_direct" or "asset_bundle"
+      auth_method: "pat"                 # Options: "pat" or "sp_oauth"
+      skip_duplicate_check: "false"      # Options: "true" or "false"
+      
+      # ════════════════════════════════════════════════════════════════════════
+      # RUNTIME CONTROL (CLI-overridable for safety)
+      # ════════════════════════════════════════════════════════════════════════
+      dry_run_mode: "true"  # ONLY this parameter can be overridden via CLI: --var="dry_run_mode=false"
   
   # ──────────────────────────────────────────────────────────────────────────
   # STAGING ENVIRONMENT (Template - customize before use)

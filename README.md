@@ -4,6 +4,8 @@
 
 Complete solution for migrating Databricks Lakeview dashboards across workspaces with catalog/schema transformations.
 
+> 📚 **Documentation:** All detailed guides and documentation are in the [`docs/`](docs/) folder. See [`docs/INDEX.md`](docs/INDEX.md) for a complete index.
+
 ## 🎯 Features
 
 - ✅ **Automated Discovery**: System table queries for dashboard inventory
@@ -15,10 +17,40 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 
 ## 📋 Prerequisites
 
-- Databricks CLI installed and configured
-- Access to source and target workspaces
-- Unity Catalog volume for storing artifacts
-- SQL warehouse in target workspace
+**Quick Checklist:**
+- ✅ Databricks CLI v0.218.0+ installed on LOCAL MACHINE
+- ✅ CLI profiles configured in `~/.databrickscfg` (see below)
+- ✅ Workspace Admin access on source and target workspaces
+- ✅ Unity Catalog volume for storing artifacts
+- ✅ SQL warehouse in target workspace
+- ✅ Cross-workspace authentication configured (PAT token or Service Principal)
+- ✅ Secret scope created for credentials
+
+### ⚡ Quick CLI Setup (5 minutes)
+
+**LOCAL MACHINE SETUP** - Run these commands in your Mac/Windows terminal:
+
+```bash
+# 1. Install CLI (if not installed)
+pip install databricks-cli --upgrade
+databricks --version  # Must be >= 0.218.0
+
+# 2. Configure profiles (edit ~/.databrickscfg)
+# See CLI_SETUP_QUICKREF.md for your specific configuration
+
+# 3. Test profiles
+databricks workspace list --profile source-workspace
+databricks workspace list --profile target-workspace
+
+# 4. Create secret scope
+databricks secrets create-scope migration_secrets --profile source-workspace
+databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
+```
+
+**📖 Complete Setup Guides:**
+- **[`CLI_SETUP_QUICKREF.md`](CLI_SETUP_QUICKREF.md)** - Quick reference for YOUR specific workspaces ⭐
+- **[`PREREQUISITES_AND_SETUP.md`](PREREQUISITES_AND_SETUP.md)** - Detailed setup with Service Principal, permissions, etc.
+- **[`TESTING_GUIDE.md`](TESTING_GUIDE.md)** - Step-by-step testing for both deployment methods
 
 ## 🏗️ Architecture
 
@@ -161,19 +193,89 @@ databricks bundle run export_transform -t dev
 
 **Notebook**: `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
-Generates asset bundle and deploys to target workspace.
+Deploys dashboards to target workspace with **two deployment method options**:
 
-**What it does:**
-- Creates bundle structure from transformed dashboards
-- Generates databricks.yml and resource definitions
-- Validates bundle
-- Deploys to target workspace
-- Verifies deployment
+#### Deployment Method Options
 
-**Run:**
-```bash
-databricks bundle run generate_deploy -t dev
+| Feature | SDK Direct (Default) | Asset Bundle + SDK |
+|---------|----------------------|---------------------|
+| **Deployment** | Direct API calls | Bundle → SDK |
+| **Dashboards** | ✅ SDK | ✅ Bundle |
+| **Permissions** | ✅ SDK (immediate) | ✅ Bundle |
+| **Schedules** | ✅ SDK (immediate) | ✅ SDK (post-bundle) |
+| **Subscriptions** | ✅ SDK (immediate) | ✅ SDK (post-bundle) |
+| **Local Download** | ❌ None | ❌ None (stays in UC volume) |
+| **Automation** | ✅ Fully automated | ✅ Fully automated |
+| **100+ Dashboards** | ✅ Yes | ✅ Yes |
+| **GitOps/IaC** | ⚠️ API-based | ✅ Bundle artifacts |
+| **Workspace Management** | ⚠️ No bundle | ✅ Bundle resources |
+| **Complexity** | 🟢 Simple | 🟡 Medium |
+| **Best For** | General migrations | IaC workflows |
+
+**1. SDK Direct (Recommended - Default)**
+- Deploys dashboards directly via Databricks SDK API
+- Fully automated - no local downloads required
+- Handles ALL metadata in one pass (dashboards, permissions, schedules, subscriptions)
+- **Best for:** Simple migrations, 100+ dashboards, full automation, quickest path
+
+**2. Asset Bundle + SDK**
+- Creates Databricks Asset Bundle with dashboard definitions
+- Deploys dashboards and permissions via bundle (stays in UC volume, no local download)
+- Applies schedules/subscriptions via SDK (bundles don't natively support these)
+- **Best for:** Infrastructure-as-code workflows, GitOps, workspace resource tracking, team needs bundle artifacts
+
+#### Configuration
+
+In `databricks.yml`:
+```yaml
+variables:
+  deployment_method: "sdk_direct"  # or "asset_bundle"
+  dry_run_mode: "false"            # "true" for preview without deployment
+  apply_permissions: "true"        # Apply ACLs
+  apply_schedules: "true"          # Apply schedules/subscriptions
 ```
+
+#### Run Options
+
+**CLI Mode (Automated):**
+```bash
+# Deploy bundle (one-time setup)
+databricks bundle deploy -t dev --profile source-workspace
+
+# Dry run - preview only (default, safe)
+databricks bundle run generate_deploy -t dev --profile source-workspace
+
+# Live deploy - creates resources (explicit flag required)
+databricks bundle run generate_deploy -t dev --var="dry_run_mode=false" --profile source-workspace
+
+# Asset Bundle method (instead of SDK Direct)
+databricks bundle run generate_deploy -t dev --var="deployment_method=asset_bundle" --profile source-workspace
+
+# Asset Bundle + Live deploy
+databricks bundle run generate_deploy -t dev \
+  --var="deployment_method=asset_bundle" \
+  --var="dry_run_mode=false" \
+  --profile source-workspace
+```
+
+**Interactive Mode (Manual):**
+1. Open `Bundle/Bundle_04_Generate_and_Deploy.ipynb` in Databricks UI
+2. Select deployment method from dropdown widget
+3. Choose dry run mode (true/false)
+4. Run all cells
+
+#### What it does:
+- Loads transformed dashboards, permissions, schedules
+- **If SDK Direct:**
+  - Creates dashboards via API
+  - Applies permissions immediately
+  - Creates schedules and subscriptions
+- **If Asset Bundle:**
+  - Generates bundle structure in UC volume
+  - Deploys dashboards and permissions via SDK (no local download)
+  - Applies schedules and subscriptions via SDK
+- Verifies deployment
+- Generates summary report
 
 ## ⚙️ Compute Options
 
@@ -216,9 +318,9 @@ libraries:
 job_clusters:
   - job_cluster_key: export_cluster
     new_cluster:
-      spark_version: "15.4.x-scala2.12"
+      spark_version: "17.3.x-scala2.13"  # Latest LTS (Spark 4.0)
       node_type_id: "i3.xlarge"
-      num_workers: 2
+      num_workers: 1
 ```
 
 2. NumPy already pinned in notebooks for compatibility
@@ -272,6 +374,12 @@ Catalog Migration/
 | `warehouse_name` | SQL warehouse | `migration_warehouse` |
 | `transformation_enabled` | Enable catalog mapping | `true` |
 | `mapping_csv_path` | Path to mapping CSV | `mappings/catalog_schema_mapping.csv` |
+| `capture_permissions` | Capture ACLs from source | `true` |
+| `apply_permissions` | Apply ACLs to target | `true` |
+| `permissions_dry_run` | Preview permission changes | `false` |
+| `capture_schedules` | Capture schedules/subscriptions | `true` |
+| `apply_schedules` | Apply schedules/subscriptions | `true` |
+| `schedules_dry_run` | Preview schedule changes | `false` |
 
 ### Catalog Mapping CSV Format
 
@@ -341,6 +449,20 @@ export DATABRICKS_CONFIG_PROFILE=your-profile
 databricks auth login --host https://your-workspace.cloud.databricks.com
 ```
 
+### Schedule/subscription errors
+
+**Error**: `Schedule creation failed` or `Subscription creation failed`
+
+**Solution**: 
+- Verify warehouse is accessible in target workspace
+- Check that schedule cron expressions are valid
+- Ensure user has permissions to create schedules
+- Review original schedule configuration for compatibility
+- Check that subscription email addresses/groups exist in target workspace
+- Use `schedules_dry_run: "true"` to preview without creating
+
+**Note**: Schedule/subscription errors don't block dashboard deployment. Dashboards will still be created successfully even if schedule application fails.
+
 ## 📊 What Gets Migrated
 
 ✅ **Included:**
@@ -349,13 +471,138 @@ databricks auth login --host https://your-workspace.cloud.databricks.com
 - Visualizations and filters
 - Catalog/schema/table references (transformed)
 - Permissions (ACLs)
+- **Scheduled refreshes** (captured and applied automatically)
+- **Subscriptions** (email/Slack/Teams - captured and applied automatically)
 - Display names (cleaned)
 
 ❌ **Not Included:**
-- Scheduled refreshes (reconfigure in target)
-- Subscriptions (reconfigure in target)
-- Dashboard history/versions
-- Comments and annotations
+- Dashboard history/versions (not available via API)
+- Comments and annotations (not available via API)
+
+## 🔐 Cross-Workspace Authentication
+
+When deploying dashboards from source to target workspace, the source cluster/compute needs network access to the target workspace API.
+
+### Authentication Options
+
+| Option | Setup Complexity | Security | Best For | Recommended |
+|--------|------------------|----------|----------|-------------|
+| **Service Principal (OAuth M2M)** | 🟡 Medium | ✅ High | Production, automation | ⭐ **Yes** |
+| **PAT Token** | 🟢 Simple | ⚠️ Rotating required | Dev/test, quick setup | Acceptable |
+| **Managed Identity (Azure)** | 🟡 Medium | ✅ High | Azure-native workloads | Yes (Azure) |
+
+### Option 1: Service Principal OAuth M2M (Recommended)
+
+The recommended approach using a Service Principal with OAuth M2M credentials.
+
+**Benefits:**
+- Credential-based security (not IP-dependent)
+- Full audit trail (SP identity logged)
+- Works with dynamic IPs and serverless
+- Follows Databricks best practices
+
+**Quick Setup:**
+
+1. **Add SP to both workspaces** (Account Console UI):
+   - Account Console → Workspaces → Source → Permissions → Add SP
+   - Account Console → Workspaces → Target → Permissions → Add SP
+
+2. **Create OAuth Secret** (Account Console UI):
+   - Account Console → User Management → Service Principals → Your SP → Secrets → Generate
+
+3. **Store credentials in secret scope**:
+   ```bash
+   databricks secrets create-scope migration_secrets --profile source-workspace
+   databricks secrets put-secret migration_secrets sp_client_id --profile source-workspace
+   databricks secrets put-secret migration_secrets sp_client_secret --profile source-workspace
+   ```
+
+4. **Enable in databricks.yml**:
+   ```yaml
+   variables:
+     auth_method: "sp_oauth"
+     sp_secret_scope: "migration_secrets"
+   ```
+
+**Full Guide:** See [`docs/SP_OAUTH_SETUP.md`](docs/SP_OAUTH_SETUP.md) for complete setup instructions.
+
+### Option 2: PAT Token (Simple)
+
+For quick setup or development environments, use a Personal Access Token.
+
+**Setup:**
+1. Generate PAT in **target** workspace (User Settings → Developer → Access Tokens)
+2. Store in secret scope on **source** workspace:
+   ```bash
+   databricks secrets put-secret migration_secrets target_workspace_token --profile source-workspace
+   ```
+
+3. Configure in databricks.yml:
+   ```yaml
+   variables:
+     auth_method: "pat"
+     target_workspace_secret_scope: "migration_secrets"
+   ```
+
+### IP Whitelisting for Cross-Workspace Access
+
+If the **target workspace has IP access lists enabled**, you must whitelist the source workspace's egress IP.
+
+#### Option 1: Automated IP Detection (Recommended)
+
+Use the provided scripts to auto-detect and whitelist:
+
+```bash
+cd "Customer-Work/Catalog Migration"
+
+# Auto-detect source IP and whitelist on target
+./scripts/auto_setup_ip_acl.sh
+
+# After migration validation, cleanup the IP entry
+./scripts/cleanup_ip_acl.sh
+```
+
+See [`docs/CLI_BEST_PRACTICES.md`](docs/CLI_BEST_PRACTICES.md) for detailed CLI reference.
+
+#### Option 2: Manual IP Identification (No Code Required)
+
+**For AWS Workspaces:**
+- Check NAT Gateway public IP in AWS Console → VPC → NAT Gateways
+- The public IP bound to your workspace's NAT Gateway is your egress IP
+
+**For Azure Workspaces:**
+- Look at the public IP(s) bound to your **NAT Gateway** that's attached to both workspace subnets
+- This is your stable egress IP for classic compute
+- Azure Portal → NAT Gateways → Select your gateway → Public IP addresses
+
+**For GCP Workspaces:**
+- Check Cloud NAT configuration for your workspace VPC
+- GCP Console → Network Services → Cloud NAT → IP addresses
+
+#### Option 3: Query from Cluster
+
+Run this in a notebook on the source workspace:
+```python
+import requests
+ip = requests.get('https://api.ipify.org').text
+print(f"Cluster Egress IP: {ip}")
+```
+
+### IP Access List Configuration
+
+After identifying your egress IP, add it to the target workspace:
+
+**Via CLI:**
+```bash
+databricks ip-access-lists create \
+  --label "source-workspace-cluster" \
+  --list-type ALLOW \
+  --ip-addresses "YOUR.IP.HERE/32" \
+  --profile target-workspace
+```
+
+**Via UI:**
+Target Workspace → Settings → Security → IP Access Lists → Add
 
 ## 🔒 Security Considerations
 
@@ -364,6 +611,7 @@ databricks auth login --host https://your-workspace.cloud.databricks.com
 - **Catalog Access**: Ensure target catalog exists and is accessible
 - **Warehouse Access**: Target warehouse must be accessible to deploying user
 - **Volume Access**: Requires READ/WRITE on UC volume
+- **IP Whitelisting**: If target has IP ACLs enabled, whitelist source egress IP
 
 ## 📝 Best Practices
 
@@ -406,18 +654,6 @@ def map_permissions(source_acl):
     # Map dev groups to prod groups
     return transformed_acl
 ```
-
-## 🤝 Contributing
-
-Found a bug? Have a feature request? 
-
-1. Document the issue with logs
-2. Test the fix in dev environment
-3. Update this README if adding features
-
-## 📄 License
-
-Internal tool - see your organization's policies.
 
 ## 🆘 Support
 

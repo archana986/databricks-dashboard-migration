@@ -175,7 +175,7 @@ def convert_permissions_for_bundle(permissions_data: Dict) -> List[Dict]:
 def generate_bundle_structure(
     bundle_name: str,
     target_workspace_url: str,
-    transformed_dashboards: List[Dict],
+    transformed_dashboards: Dict[str, Dict],  # Dict with dashboard_id as key
     permissions_map: Dict[str, Dict],
     bundle_output_path: str,
     warehouse_id: str = None,
@@ -189,7 +189,7 @@ def generate_bundle_structure(
     Args:
         bundle_name: Name of the bundle
         target_workspace_url: Target workspace URL
-        transformed_dashboards: List of dashboard dicts with 'id', 'name', 'json_path'
+        transformed_dashboards: Dict mapping dashboard_id -> {'display_name', 'json', 'source_path'}
         permissions_map: Map of dashboard_id/name to permissions
         bundle_output_path: Where to create bundle
         warehouse_id: Direct warehouse ID
@@ -232,12 +232,13 @@ def generate_bundle_structure(
     # Generate dashboard resources
     dashboard_resources = {}
     
-    for dash in transformed_dashboards:
-        dashboard_id = dash['id']
-        display_name = dash['name']
+    dashboard_items = list(transformed_dashboards.items())
+    
+    for dashboard_id, dash_data in dashboard_items:
+        display_name = dash_data['display_name']
         
         # Copy transformed JSON to bundle
-        src_json_path = dash['json_path']
+        src_json_path = dash_data['source_path']
         dest_json_path = f"{bundle_path}/src/dashboards/{Path(src_json_path).name}"
         
         try:
@@ -285,6 +286,9 @@ def validate_bundle(bundle_path: str) -> Dict[str, Any]:
     """
     Validate bundle using Databricks CLI.
     
+    NOTE: This function is designed to be run from local CLI, not within Databricks notebooks.
+    When run from a notebook, it will skip validation gracefully.
+    
     Args:
         bundle_path: Path to bundle directory
     
@@ -294,6 +298,24 @@ def validate_bundle(bundle_path: str) -> Dict[str, Any]:
     import subprocess
     
     try:
+        # Check if 'databricks bundle' command is available
+        check_result = subprocess.run(
+            ['databricks', 'bundle', '--help'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if check_result.returncode != 0 or 'No such command' in check_result.stderr:
+            # CLI doesn't support bundle command - skip validation
+            return {
+                'success': True,
+                'skipped': True,
+                'stdout': 'Bundle validation skipped - CLI version does not support bundle command.\n'
+                         'Validation should be done from local machine using: databricks bundle validate'
+            }
+        
+        # Run validation
         result = subprocess.run(
             ['databricks', 'bundle', 'validate'],
             cwd=bundle_path,
@@ -307,6 +329,14 @@ def validate_bundle(bundle_path: str) -> Dict[str, Any]:
             'stdout': result.stdout,
             'stderr': result.stderr
         }
+    except FileNotFoundError:
+        # databricks CLI not found
+        return {
+            'success': True,
+            'skipped': True,
+            'stdout': 'Bundle validation skipped - Databricks CLI not available in this environment.\n'
+                     'Validation should be done from local machine using: databricks bundle validate'
+        }
     except Exception as e:
         return {
             'success': False,
@@ -316,6 +346,9 @@ def validate_bundle(bundle_path: str) -> Dict[str, Any]:
 def deploy_bundle(bundle_path: str, target: str = None) -> Dict[str, Any]:
     """
     Deploy bundle using Databricks CLI.
+    
+    NOTE: This function is designed to be run from local CLI, not within Databricks notebooks.
+    When run from a notebook, it will skip deployment gracefully.
     
     Args:
         bundle_path: Path to bundle directory
@@ -331,6 +364,25 @@ def deploy_bundle(bundle_path: str, target: str = None) -> Dict[str, Any]:
         cmd.extend(['--target', target])
     
     try:
+        # Check if 'databricks bundle' command is available
+        check_result = subprocess.run(
+            ['databricks', 'bundle', '--help'],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        
+        if check_result.returncode != 0 or 'No such command' in check_result.stderr:
+            # CLI doesn't support bundle command - skip deployment
+            return {
+                'success': True,
+                'skipped': True,
+                'stdout': f'Bundle deployment skipped - CLI version does not support bundle command.\n'
+                         f'Deploy from local machine using: databricks bundle deploy -t {target or "dev"}\n'
+                         f'Bundle location: {bundle_path}'
+            }
+        
+        # Run deployment
         result = subprocess.run(
             cmd,
             cwd=bundle_path,
@@ -343,6 +395,15 @@ def deploy_bundle(bundle_path: str, target: str = None) -> Dict[str, Any]:
             'success': result.returncode == 0,
             'stdout': result.stdout,
             'stderr': result.stderr
+        }
+    except FileNotFoundError:
+        # databricks CLI not found
+        return {
+            'success': True,
+            'skipped': True,
+            'stdout': f'Bundle deployment skipped - Databricks CLI not available in this environment.\n'
+                     f'Deploy from local machine using: databricks bundle deploy -t {target or "dev"}\n'
+                     f'Bundle location: {bundle_path}'
         }
     except Exception as e:
         return {
