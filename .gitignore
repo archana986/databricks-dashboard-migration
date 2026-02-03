@@ -35,11 +35,15 @@ exported/
 # Archives
 _archive/
 archive/
-_local_archive/# Temp/test files
+_local_archive/
+
+# Temp/test files
 temp/
-_temp/# Local personal files (not for GitHub)
+_temp/
+
+# Local personal files (not for GitHub)
 GIT_PUSH_GUIDE.md
 GIT_WORKFLOW.md
 CONFIG_SKIP_WORKTREE_GUIDE.md
 CONFIG_SETUP_COMPLETE.md
-localplandoc.mdchecklater/
+localplandoc.md

@@ -26,6 +26,41 @@ This bundle follows a **deploy → use → destroy** lifecycle:
 
 ## Usage
 
+### Interactive Usage (Databricks UI)
+
+If you're running notebooks interactively in the Databricks UI and cannot run shell scripts:
+
+1. **Open the notebook** in your source workspace:
+   - Navigate to: Repos → [your-repo] → `ip-detection/notebooks/Detect_Cluster_IP.ipynb`
+   - Or upload `Detect_Cluster_IP.ipynb` to your workspace
+
+2. **Run all cells** to detect your cluster's egress IP
+   - The notebook will display: `Cluster Egress IP: X.X.X.X`
+
+3. **Copy the detected IP** from the output
+
+4. **Add to target workspace** via CLI (run from your local terminal):
+   ```bash
+   databricks ip-access-lists create \
+     --label "source-workspace-migration" \
+     --list-type ALLOW \
+     --ip-addresses "YOUR.IP.HERE/32" \
+     --profile target-workspace
+   ```
+
+5. **Wait 5 minutes** for IP ACL propagation before running Step 4 (Deploy)
+
+6. **After migration**, remove the IP entry:
+   ```bash
+   # List entries to find the ID
+   databricks ip-access-lists list --profile target-workspace
+   
+   # Delete by ID
+   databricks ip-access-lists delete LIST_ID --profile target-workspace
+   ```
+
+> **Note:** The `databricks ip-access-lists` commands must be run from your local terminal with CLI configured. These cannot be run inside Databricks notebooks.
+
 ### Manual Deployment
 
 ```bash

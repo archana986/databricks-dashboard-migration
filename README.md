@@ -57,6 +57,8 @@ For interactive execution in the Databricks UI:
 
 **Best for:** First-time users, debugging, understanding the workflow.
 
+> **Important for IP Whitelisting:** If your target workspace has IP Access Lists enabled, you'll need to whitelist your source cluster IP before Step 4. The IP detection can be done interactively (see [ip-detection/README.md](ip-detection/README.md#interactive-usage-databricks-ui)), but the actual whitelisting requires the Databricks CLI from your local terminal.
+
 ## Quick CLI Setup
 
 ```bash
@@ -157,6 +159,8 @@ flowchart TD
 - Credentials can be auto-rotated
 - Follows Databricks security best practices
 
+> **Important:** If the target workspace has **IP Access Lists** enabled, you must still whitelist the source cluster IP regardless of authentication method. IP ACLs are network-level restrictions that apply before authentication. SP OAuth provides credential security, not IP bypass.
+
 ```bash
 # Step 1: Create Service Principal in Account Console
 # Account Console → User Management → Service Principals → Add
@@ -198,7 +202,7 @@ databricks ip-access-lists create \
   --profile target-workspace
 ```
 
-See `checklater/SP_OAUTH_SETUP.md` for detailed Service Principal setup guide.
+See [setup-guides/SP_OAUTH_SETUP.md](setup-guides/SP_OAUTH_SETUP.md) for detailed Service Principal setup guide.
 
 ### Option 2: PAT Token (Alternative - Quick Setup)
 
@@ -254,7 +258,7 @@ flowchart TD
     end
     
     subgraph step4 [Step 4: Deploy]
-        H --> M{Method?}
+        M{Method?}
         M -->|SDK Direct| N[API Deployment]
         M -->|Asset Bundle| O[Bundle Deployment]
         N --> P[Target Workspace]
@@ -632,9 +636,9 @@ Catalog Migration/
 │   ├── sp_oauth_auth.py              # Service Principal auth
 │   ├── transform.py                  # Catalog transformation
 │   └── volume_utils.py               # UC volume operations
-└── checklater/                       # Deferred testing items
-    ├── Setup_Migration_Secrets.ipynb
-    └── SP_OAUTH_SETUP.md
+└── setup-guides/                     # Setup and configuration guides
+    ├── Setup_Migration_Secrets.ipynb # Interactive PAT setup helper
+    └── SP_OAUTH_SETUP.md             # Service Principal OAuth guide
 ```
 
 ## Configuration Reference
@@ -711,6 +715,6 @@ databricks bundle deploy -t dev --profile source-workspace
 
 ---
 
-**Version**: 2.5.0  
+**Version**: 2.6.0  
 **Last Updated**: February 2, 2026  
 **Status**: Production Ready
