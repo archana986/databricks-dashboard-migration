@@ -205,7 +205,24 @@ def generate_bundle_structure(
     # Create bundle directory structure
     bundle_path = f"{bundle_output_path}/{bundle_name}"
     
-    # Use dbutils if available
+    # ========================================================================
+    # CLEANUP: Remove old bundle to ensure clean slate
+    # ========================================================================
+    # Bundles are regenerable artifacts - always start fresh to avoid stale files
+    try:
+        _get_dbutils().fs.rm(bundle_path, recurse=True)
+        print(f"🗑️  Removed old bundle at: {bundle_path}")
+    except:
+        # Bundle doesn't exist yet (first run) or dbutils not available
+        try:
+            import shutil
+            if os.path.exists(bundle_path):
+                shutil.rmtree(bundle_path)
+                print(f"🗑️  Removed old bundle at: {bundle_path}")
+        except:
+            pass  # No old bundle to remove
+    
+    # Create fresh bundle directory structure
     try:
         _get_dbutils().fs.mkdirs(bundle_path)
         _get_dbutils().fs.mkdirs(f"{bundle_path}/resources")
@@ -260,7 +277,8 @@ def generate_bundle_structure(
         
         # Create resource
         resource_key = f"dashboard_{dashboard_id}"
-        file_path_relative = f"src/dashboards/{Path(src_json_path).name}"
+        # Path is relative to resources/dashboards.yml, so go up one level
+        file_path_relative = f"../src/dashboards/{Path(src_json_path).name}"
         
         dashboard_resources[resource_key] = create_dashboard_resource(
             dashboard_id,

@@ -174,13 +174,15 @@ def archive_old_files(
             if file_info.path.endswith('/'):
                 continue
             
-            # Check if file matches pattern
+            # Check if file matches pattern using fnmatch-style matching
             file_matches = False
             if file_pattern == "*_transformed.json" and "_transformed.json" in file_info.name:
                 file_matches = True
             elif file_pattern == "*_permissions.json" and "_permissions.json" in file_info.name:
                 file_matches = True
             elif file_pattern == "*_schedules.json" and "_schedules.json" in file_info.name:
+                file_matches = True
+            elif file_pattern == "*.lvdash.json" and file_info.name.endswith('.lvdash.json'):
                 file_matches = True
             elif file_pattern == "*.json" and file_info.name.endswith('.json'):
                 file_matches = True

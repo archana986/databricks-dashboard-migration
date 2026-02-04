@@ -28,22 +28,22 @@ variables:
   # ──────────────────────────────────────────────────────────────────────────
   source_workspace_url:
     description: Source workspace URL where dashboards currently exist
-    default: https://e2-demo-field-eng.cloud.databricks.com
+    default: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
   
   target_workspace_url:
     description: Target workspace URL where dashboards will be migrated
-    default: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com
+    default: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
   
   # ──────────────────────────────────────────────────────────────────────────
   # CATALOG & VOLUME CONFIGURATION
   # ──────────────────────────────────────────────────────────────────────────
   catalog:
     description: Source catalog to scan for dashboards
-    default: archana_krish_fe_dsa
+    default: YOUR_CATALOG
   
   volume_base:
     description: Base volume path for migration artifacts (format /Volumes/catalog/schema/volume)
-    default: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
+    default: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
   
   # ──────────────────────────────────────────────────────────────────────────
   # PATHS (relative to volume_base)
@@ -437,26 +437,31 @@ targets:
   #
   # To change deployment_method or auth_method: Edit this YAML and redeploy bundle
   # ──────────────────────────────────────────────────────────────────────────
+  # ──────────────────────────────────────────────────────────────────────────
+  # DEV ENVIRONMENT 
+  # ──────────────────────────────────────────────────────────────────────────
+  # INSTRUCTIONS: Update ALL values below for your environment before deploying
+  # ──────────────────────────────────────────────────────────────────────────
   dev:
     mode: development
     workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com
+      host: https://e2-demo-field-eng.cloud.databricks.com  # UPDATE: Your source workspace URL
     
     variables:
       # ════════════════════════════════════════════════════════════════════════
-      # WORKSPACE CONFIGURATION (Edit these for your environment)
+      # WORKSPACE CONFIGURATION - UPDATE ALL THESE FOR YOUR ENVIRONMENT
       # ════════════════════════════════════════════════════════════════════════
-      catalog: archana_krish_fe_dsa
-      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration
-      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com
-      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com
-      warehouse_id: 53af68e7019d2b78
-      warehouse_name: ak-migration
+      catalog: archana_krish_fe_dsa                          # UPDATE: Your catalog name
+      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration  # UPDATE: Your volume path
+      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # UPDATE: Source workspace
+      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com  # UPDATE: Target workspace
+      warehouse_id: 53af68e7019d2b78                         # UPDATE: Target warehouse ID (or leave empty)
+      warehouse_name: ak-migration                            # UPDATE: Target warehouse name
       
       # ════════════════════════════════════════════════════════════════════════
       # DEPLOYMENT CONFIGURATION (Edit to change behavior, then redeploy bundle)
       # ════════════════════════════════════════════════════════════════════════
-      deployment_method: "asset_bundle"   # Options: "sdk_direct" or "asset_bundle"
+      deployment_method: "asset_bundle"    # Options: "asset_bundle" (recommended) or "sdk_direct"
       auth_method: "pat"                 # Options: "pat" or "sp_oauth"
       skip_duplicate_check: "false"      # Options: "true" or "false"
       
@@ -477,7 +482,7 @@ targets:
       # Core configuration - CUSTOMIZE THESE
       catalog: staging_catalog  # Source catalog in staging
       volume_base: /Volumes/staging_catalog/migration/dashboard_migration  # Staging volume path
-      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # Source workspace (usually dev or prod)
+      source_workspace_url: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com  # Source workspace (usually dev or prod)
       target_workspace_url: https://your-staging-workspace.cloud.databricks.com  # CHANGE THIS
       warehouse_name: staging_warehouse  # CHANGE THIS to staging warehouse name
       

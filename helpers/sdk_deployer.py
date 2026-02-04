@@ -73,7 +73,7 @@ def deploy_via_sdk(
             dashboard_count = 0
             for dash in client.lakeview.list():
                 dashboard_count += 1
-                # Cache only dashboards in our target folder
+                # Cache ONLY dashboards in target folder (don't interfere with other folders)
                 if dash.parent_path and dash.parent_path.startswith(target_parent_path):
                     existing_dashboards_cache[dash.display_name] = dash
                 
@@ -141,6 +141,8 @@ def deploy_via_sdk(
                 if existing_dashboard:
                     # Dashboard exists - update it
                     print(f"      ♻️  Updating existing dashboard...")
+                    dashboard_created = False
+                    new_dashboard_id = None
                     try:
                         # Create Dashboard object with updated content
                         dashboard_obj = Dashboard(
@@ -156,6 +158,7 @@ def deploy_via_sdk(
                         )
                         print(f"      ✅ Dashboard updated: {existing_dashboard.dashboard_id}")
                         new_dashboard_id = existing_dashboard.dashboard_id
+                        dashboard_created = True  # Mark as successful so it proceeds to publish
                     except Exception as update_err:
                         print(f"      ❌ Update failed: {update_err}")
                         raise
@@ -191,18 +194,73 @@ def deploy_via_sdk(
                         new_dashboard_id = created_dashboard.dashboard_id
                         dashboard_created = True
                     except Exception as create_err:
-                        # If creation fails due to duplicate (when skip_duplicate_check=true)
+                        # If creation fails due to duplicate (dashboard exists elsewhere in workspace)
                         if "already exists" in str(create_err).lower():
-                            print(f"      ⚠️  Dashboard already exists - SKIPPED (no update performed)")
-                            print(f"      📝 Note: Existing dashboard not modified")
-                            print(f"      💡 Options:")
-                            print(f"         1. Set skip_duplicate_check=false to update existing (slower)")
-                            print(f"         2. Manually delete dashboards in {target_parent_path} first")
-                            # Mark as skipped, don't fail the deployment
-                            result['status'] = 'skipped'
-                            result['errors'].append(f"Already exists - skipped")
-                            dashboard_created = False
-                            # Don't try to find existing - just move on
+                            print(f"      ⚠️  Dashboard already exists somewhere in workspace")
+                            print(f"      🔍 Searching for existing dashboard...")
+                            
+                            # Find the existing dashboard anywhere in workspace
+                            found_dashboard = None
+                            for dash in client.lakeview.list():
+                                if dash.display_name == clean_name:
+                                    found_dashboard = dash
+                                    break
+                            
+                            if found_dashboard:
+                                old_path = found_dashboard.parent_path or "(no folder)"
+                                dashboard_url = f"{client.config.host}/sql/dashboards/{found_dashboard.dashboard_id}"
+                                print(f"         📍 Location: {old_path}")
+                                print(f"         🔗 Link: {dashboard_url}")
+                                print(f"         🆔 Dashboard ID: {found_dashboard.dashboard_id}")
+                                
+                                # If dashboard is NOT in target folder, rename it and create new one
+                                if not found_dashboard.parent_path or not found_dashboard.parent_path.startswith(target_parent_path):
+                                    print(f"      ♻️  Dashboard is in different folder - will rename existing")
+                                    print(f"      🔄 Renaming existing dashboard to preserve it...")
+                                    try:
+                                        import time
+                                        timestamp = time.strftime("%Y%m%d_%H%M%S")
+                                        new_name = f"{clean_name}_archived_{timestamp}"
+                                        
+                                        # Update the existing dashboard with new name
+                                        rename_obj = Dashboard(
+                                            display_name=new_name,
+                                            parent_path=found_dashboard.parent_path,
+                                            warehouse_id=warehouse_id,
+                                            serialized_dashboard=found_dashboard.serialized_dashboard or ""
+                                        )
+                                        client.lakeview.update(
+                                            dashboard_id=found_dashboard.dashboard_id,
+                                            dashboard=rename_obj
+                                        )
+                                        print(f"         ✅ Renamed existing to: {new_name}")
+                                        print(f"         📍 Kept at: {old_path}")
+                                        print(f"         🔗 Link: {dashboard_url}")
+                                        
+                                        # Retry creation with original name
+                                        print(f"      🔄 Creating new dashboard in target folder...")
+                                        created_dashboard = client.lakeview.create(dashboard=dashboard_obj)
+                                        print(f"      ✅ Dashboard created (DRAFT): {created_dashboard.dashboard_id}")
+                                        new_dashboard_url = f"{client.config.host}/sql/dashboards/{created_dashboard.dashboard_id}"
+                                        print(f"         🔗 New dashboard: {new_dashboard_url}")
+                                        new_dashboard_id = created_dashboard.dashboard_id
+                                        dashboard_created = True
+                                    except Exception as rename_err:
+                                        print(f"      ❌ Failed to rename and recreate: {rename_err}")
+                                        result['status'] = 'skipped'
+                                        result['errors'].append(f"Already exists elsewhere - {str(rename_err)}")
+                                        dashboard_created = False
+                                else:
+                                    # Dashboard already in target folder - this shouldn't happen (cache should have found it)
+                                    print(f"      ⚠️  Dashboard already in target folder - SKIPPED")
+                                    result['status'] = 'skipped'
+                                    result['errors'].append(f"Already exists in target folder")
+                                    dashboard_created = False
+                            else:
+                                print(f"      ❌ Could not find existing dashboard")
+                                result['status'] = 'skipped'
+                                result['errors'].append(f"Already exists but not found")
+                                dashboard_created = False
                         else:
                             raise
                 

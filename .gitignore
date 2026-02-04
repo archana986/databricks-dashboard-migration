@@ -40,6 +40,8 @@ _local_archive/
 # Temp/test files
 temp/
 _temp/
+bundle_deploy_*/
+dashboard_bundle/
 
 # Local personal files (not for GitHub)
 GIT_PUSH_GUIDE.md
@@ -47,3 +49,4 @@ GIT_WORKFLOW.md
 CONFIG_SKIP_WORKTREE_GUIDE.md
 CONFIG_SETUP_COMPLETE.md
 localplandoc.md
+LOCAL_RUN_LOG.md

@@ -15,6 +15,7 @@ Complete solution for migrating Databricks Lakeview dashboards across workspaces
 - **Cross-Workspace Auth**: Service Principal OAuth (recommended) or PAT Token
 - **Runtime Overrides**: CLI parameters for dry_run, target_path, deployment_method
 - **Multi-Environment**: Dev, staging, prod configurations
+- **Automatic Cleanup**: Archives old files before generating new ones, preserving audit trail
 
 ## Prerequisites
 
@@ -61,19 +62,42 @@ For interactive execution in the Databricks UI:
 
 ## Quick CLI Setup
 
+### Step 1: Install Databricks CLI
+
 ```bash
-# Install CLI
 pip install databricks-cli --upgrade
 databricks --version  # Must be >= 0.218.0
-
-# Configure profiles
-databricks configure --profile source-workspace
-databricks configure --profile target-workspace
-
-# Test profiles
-databricks workspace list --profile source-workspace
-databricks workspace list --profile target-workspace
 ```
+
+### Step 2: Configure CLI Profiles
+
+You need **two CLI profiles** - one for each workspace:
+
+```bash
+# Configure SOURCE workspace profile (where dashboards currently exist)
+databricks configure --profile source-workspace
+# When prompted:
+#   Host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+#   Token: <your PAT from source workspace>
+
+# Configure TARGET workspace profile (where dashboards will be migrated)
+databricks configure --profile target-workspace
+# When prompted:
+#   Host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+#   Token: <your PAT from target workspace>
+```
+
+### Step 3: Test Both Profiles
+
+```bash
+# Verify source profile works
+databricks workspace list / --profile source-workspace
+
+# Verify target profile works  
+databricks workspace list / --profile target-workspace
+```
+
+> **Tip:** Generate PAT tokens from each workspace: User Settings → Developer → Access Tokens → Generate New Token
 
 ## Cross-Workspace Authentication
 
@@ -328,13 +352,30 @@ databricks bundle run export_transform -t dev --profile source-workspace
 # Step 3.5: Configure cross-workspace auth (see section above)
 # - Set up SP OAuth (recommended) or PAT token
 # - Whitelist IP if target has IP ACLs:
-./scripts/auto_setup_ip_acl.sh --source-profile source-workspace --target-profile target-workspace
+./scripts/auto_setup_ip_acl.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
 
-# Step 4: Deploy (dry run first - safe)
-databricks bundle run generate_deploy -t dev --profile source-workspace
+# Step 4a: Generate bundle OR deploy via SDK
+# For Asset Bundle (generates bundle, then deploy via CLI):
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=asset_bundle"
 
-# Step 4: Deploy (live - creates resources)
-databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --profile source-workspace
+# For SDK Direct (deploys immediately - dry run first):
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=true"
+
+# Step 4b: If using Asset Bundle, deploy from local terminal
+./scripts/deploy_asset_bundle.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration \
+  --dry-run  # Remove this flag for actual deployment
+
+# If using SDK Direct and dry run looked good, deploy for real:
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=false"
 
 # Step 5: Validate and cleanup IP whitelist
 ./scripts/cleanup_ip_acl.sh --target-profile target-workspace
@@ -426,30 +467,77 @@ databricks secrets put-secret migration_secrets target_workspace_token --profile
 # Auto-detect cluster IP and whitelist on target (recommended)
 ./scripts/auto_setup_ip_acl.sh \
   --source-profile source-workspace \
-  --target-profile target-workspace
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
 
 # Or dry run first to preview
-./scripts/auto_setup_ip_acl.sh --dry-run
+./scripts/auto_setup_ip_acl.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration \
+  --dry-run
 
 # Or provide IP directly (skip auto-detection)
-./scripts/auto_setup_ip_acl.sh --cluster-ip YOUR.IP.HERE
+./scripts/auto_setup_ip_acl.sh \
+  --cluster-ip YOUR.IP.HERE \
+  --target-profile target-workspace
 ```
 
 ### Step 4: Deploy Dashboards
 
+**Choose your deployment method:**
+
+#### Method A: SDK Direct (Notebook deploys everything)
+
 ```bash
-# Dry run first (safe - no resources created)
-databricks bundle run generate_deploy -t dev --profile source-workspace
+# Dry run first (preview - no resources created)
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=true"
 
-# Live deployment (creates dashboards in target)
-databricks bundle run generate_deploy -t dev \
-  --params "dry_run_mode=false" \
-  --profile source-workspace
+# If dry run looks good, deploy for real
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=false"
+```
 
-# Optional: Asset Bundle deployment method
-databricks bundle run generate_deploy -t dev \
-  --params "dry_run_mode=false,deployment_method=asset_bundle" \
-  --profile source-workspace
+#### Method B: Asset Bundle (Notebook generates, CLI deploys)
+
+```bash
+# Step 4a: Run notebook to generate bundle (same command for dry/live)
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=asset_bundle"
+
+# Step 4b: Deploy from LOCAL terminal with dry run first
+./scripts/deploy_asset_bundle.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration \
+  --dry-run
+
+# Step 4c: If dry run looks good, deploy for real (remove --dry-run)
+./scripts/deploy_asset_bundle.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
+```
+
+**OR manually without the script:**
+
+```bash
+# Download bundle from volume
+databricks fs cp -r \
+  dbfs:/Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration/bundles/dashboard_migration \
+  ./dashboard_bundle \
+  --profile source-workspace \
+  --overwrite
+
+# Navigate to bundle
+cd ./dashboard_bundle
+
+# Dry run deploy
+databricks bundle deploy --dry-run --profile target-workspace
+
+# Deploy for real
+databricks bundle deploy --profile target-workspace
 ```
 
 ### Step 5: Validate and Cleanup
@@ -472,11 +560,16 @@ databricks bundle run generate_deploy -t dev \
 
 **Notebook**: `Bundle/Bundle_01_Inventory_Generation.ipynb`
 
-Discovers all dashboards and generates inventory CSV.
+Discovers all dashboards from source workspace and generates inventory CSV.
 
+**Command:**
 ```bash
 databricks bundle run inventory_generation -t dev --profile source-workspace
 ```
+
+**Output:** `inventory.csv` saved to volume
+
+---
 
 ### Step 2: Manual Review and Approval
 
@@ -486,17 +579,37 @@ databricks bundle run inventory_generation -t dev --profile source-workspace
 1. Open the notebook in your source workspace
 2. Review the inventory table
 3. Select/deselect dashboards to migrate
-4. Run the approval cell to save `approved_inventory.csv`
+4. Run the approval cell to save `inventory_approved.csv`
+
+**Output:** `inventory_approved.csv` saved to volume
+
+---
 
 ### Step 3: Export and Transform
 
 **Notebook**: `Bundle/Bundle_03_Export_and_Transform.ipynb`
 
-Exports approved dashboards and applies catalog transformations.
+Exports approved dashboards and applies catalog/schema transformations.
 
+**Command:**
 ```bash
 databricks bundle run export_transform -t dev --profile source-workspace
 ```
+
+**What this does:**
+- Reads `inventory_approved.csv`
+- Exports dashboard JSONs from source
+- Applies catalog mapping transformations
+- Captures permissions and schedules
+- Archives old files before writing new ones
+- Saves transformed dashboards to volume
+
+**Output:** 
+- Transformed dashboard JSONs (`*.lvdash.json`)
+- Permissions CSV
+- Schedules CSV
+
+---
 
 ### Step 3.5: Configure Cross-Workspace Authentication
 
@@ -511,16 +624,23 @@ Choose one:
 > **Note:** The IP ACL scripts are **bash shell scripts** that must be run from your **local terminal** (macOS, Linux, or Windows Git Bash/WSL). They cannot run inside Databricks notebooks or the Databricks UI. The scripts require the Databricks CLI to be installed and configured with profiles.
 
 ```bash
-# Option A: Automated script (recommended)
+# Option A: Full automated setup (recommended)
 ./scripts/auto_setup_ip_acl.sh \
   --source-profile source-workspace \
-  --target-profile target-workspace
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
 
-# Option B: Dry run first to see what would happen
-./scripts/auto_setup_ip_acl.sh --dry-run
+# Option B: Dry run first to preview actions
+./scripts/auto_setup_ip_acl.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration \
+  --dry-run
 
 # Option C: Provide IP directly (skip auto-detection)
-./scripts/auto_setup_ip_acl.sh --cluster-ip 35.155.15.56
+./scripts/auto_setup_ip_acl.sh \
+  --cluster-ip YOUR.IP.HERE \
+  --target-profile target-workspace
 ```
 
 For interactive IP detection (to get the IP manually), see [Bundle/Bundle_IP_ACL_Setup.ipynb](Bundle/Bundle_IP_ACL_Setup.ipynb).
@@ -529,15 +649,121 @@ For interactive IP detection (to get the IP manually), see [Bundle/Bundle_IP_ACL
 
 **Notebook**: `Bundle/Bundle_04_Generate_and_Deploy.ipynb`
 
-Deploys dashboards to target workspace.
+Two deployment methods are available. Both run the same notebook first, but differ in how/where deployment happens.
+
+#### Option A: Asset Bundle (Recommended for GitOps/CI-CD)
+
+**Phase 1: Generate Bundle (Notebook)**
+
+The notebook generates a Databricks Asset Bundle and saves it to UC Volume:
 
 ```bash
-# Dry run (default - safe preview)
-databricks bundle run generate_deploy -t dev --profile source-workspace
-
-# Live deployment
-databricks bundle run generate_deploy -t dev --params "dry_run_mode=false" --profile source-workspace
+# Run notebook to generate bundle
+# NOTE: dry_run_mode doesn't affect bundle generation - it always generates the bundle
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=asset_bundle"
 ```
+
+**What this does:**
+- Loads transformed dashboards from volume
+- Generates Asset Bundle structure
+- Saves to: `/Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration/bundles/dashboard_migration`
+- **Stops here** - shows CLI instructions for deployment
+
+---
+
+**Phase 2: Deploy Bundle (CLI from LOCAL terminal)**
+
+After the notebook completes, deploy the bundle using CLI commands:
+
+**Method 1: Using the deploy script (recommended)**
+
+```bash
+# Dry run first (preview changes)
+./scripts/deploy_asset_bundle.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration \
+  --dry-run
+
+# If dry run looks good, deploy for real (remove --dry-run flag)
+./scripts/deploy_asset_bundle.sh \
+  --source-profile source-workspace \
+  --target-profile target-workspace \
+  --volume-base /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
+```
+
+**Method 2: Manual CLI commands**
+
+```bash
+# 1. Download bundle from volume to local machine
+databricks fs cp -r \
+  dbfs:/Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration/bundles/dashboard_migration \
+  ./dashboard_bundle \
+  --profile source-workspace \
+  --overwrite
+
+# 2. Navigate to bundle folder
+cd ./dashboard_bundle
+
+# 3. Dry run deploy (preview changes)
+databricks bundle deploy --dry-run --profile target-workspace
+
+# 4. If dry run looks good, deploy for real
+databricks bundle deploy --profile target-workspace
+```
+
+---
+
+#### Option B: SDK Direct (Recommended for Notebook-Only Workflow)
+
+The notebook deploys directly to target workspace using SDK API calls. No CLI steps needed after notebook runs.
+
+```bash
+# Dry run first (preview - no resources created)
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=true"
+
+# If dry run looks good, deploy for real
+databricks bundle run generate_deploy -t dev --profile source-workspace \
+  --params "deployment_method=sdk_direct,dry_run_mode=false"
+```
+
+**What this does:**
+- Loads transformed dashboards
+- Connects to target workspace via SDK
+- Creates/publishes dashboards directly
+- Applies permissions
+- **Handles existing dashboards**: If a dashboard with the same name exists elsewhere (e.g., archived), it automatically renames the old one and creates the new one in the target folder
+- **No CLI steps needed** - fully automated in notebook
+
+---
+
+**Comparison:**
+
+| Method | Notebook Run | Dry Run Control | Deployment Location | Best For |
+|--------|-------------|-----------------|---------------------|----------|
+| **Asset Bundle** | Same for both | CLI flag (`--dry-run`) | CLI on local machine | GitOps, CI/CD, version control |
+| **SDK Direct** | Varies by `dry_run_mode` param | Notebook param (`dry_run_mode`) | Within notebook | Quick deployment, notebook-only |
+
+**Key Differences:**
+- **Asset Bundle**: Notebook run is SAME for dry/live run. Dry run happens at CLI level with `--dry-run` flag.
+- **SDK Direct**: Notebook run VARIES by `dry_run_mode` parameter. No CLI steps needed after notebook.
+
+**Visual Flow:**
+
+```
+SDK Direct:
+  Notebook (dry_run_mode=true)  → Preview complete → Done
+  Notebook (dry_run_mode=false) → Dashboards deployed → Done
+
+Asset Bundle:
+  Notebook (deployment_method=asset_bundle) → Bundle generated → 
+    CLI (--dry-run) → Preview → 
+    CLI (no --dry-run) → Dashboards deployed → Done
+```
+
+---
 
 ### Step 5: Validate and Cleanup
 
@@ -555,6 +781,51 @@ After successful migration, validate dashboards in the target workspace, then cl
 # Skip confirmation prompts (automation)
 ./scripts/cleanup_ip_acl.sh --force
 ```
+
+## Where to Find Deployed Resources
+
+After running the migration, resources are located in different places:
+
+### 1. Deployed Dashboards (Target Workspace)
+
+**Location:** SQL Dashboards section of target workspace
+
+**To view:**
+1. Navigate to target workspace in browser
+2. Click **SQL** in left sidebar
+3. Click **Dashboards**
+4. Look in folder: `/Shared/Migrated_Dashboards_V2/` (or your configured `target_parent_path`)
+
+**Note:** Dashboards are NOT in Workspace folders - they're in the SQL Dashboards section!
+
+### 2. Migration Notebooks & Code (Source Workspace)
+
+**Location:** `.bundle` folder in source workspace
+
+**To view:**
+```
+Workspace → Users → your-email@company.com → .bundle → dashboard_migration → dev → files
+```
+
+Contains:
+- `Bundle/` - All 4 notebooks
+- `helpers/` - Python helper modules
+
+### 3. Volume Files (Both Workspaces)
+
+**Location:** Unity Catalog Volume (accessible from both workspaces)
+
+**To view:**
+1. Click **Catalog** in left sidebar
+2. Navigate to: `your_catalog` → `your_schema` → `dashboard_migration` (volume)
+
+**Folders:**
+- `dashboard_inventory/` - Generated inventory with `archive/` subfolder
+- `dashboard_inventory_approved/` - Approved inventory with `archive/` subfolder  
+- `dashboard_exported/` - Exported dashboard JSONs with `archive/` subfolder
+- `dashboard_transformed/` - Transformed dashboards with `archive/` subfolder
+- `bundles/` - Asset Bundle files (if using Asset Bundle deployment)
+- Each folder has timestamped archives preserving previous runs
 
 ## Runtime Parameter Overrides
 
