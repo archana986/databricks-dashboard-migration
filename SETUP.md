@@ -81,9 +81,63 @@ targets:
 
 ---
 
-## Step 3: Service Principal OAuth Setup (Recommended)
+## Step 3: Upload Catalog/Schema Mapping CSV
 
-SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4.
+Step 3 (Export & Transform) uses a mapping CSV to remap catalog, schema, and table references when transforming dashboards for the target workspace. You **must** upload this file before running Export & Transform.
+
+### CSV location
+
+```
+<volume_base>/mappings/catalog_schema_mapping.csv
+```
+
+For example: `/Volumes/my_catalog/my_schema/dashboard_migration/mappings/catalog_schema_mapping.csv`
+
+### CSV format
+
+| Column | Required | Description |
+|---|---|---|
+| `old_catalog` | Yes | Source catalog name |
+| `old_schema` | Yes | Source schema name |
+| `old_table` | No | Source table name (leave blank for schema-level mapping) |
+| `new_catalog` | Yes | Target catalog name |
+| `new_schema` | Yes | Target schema name |
+| `new_table` | No | Target table name (leave blank for schema-level mapping) |
+| `old_volume` | No | Source volume path to remap |
+| `new_volume` | No | Target volume path |
+
+### Example: schema-level mapping (most common)
+
+```csv
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+my_source_catalog,my_source_schema,,my_target_catalog,my_target_schema,,,
+```
+
+### Example: table-level mapping
+
+```csv
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+prod_catalog,analytics,daily_sales,dev_catalog,analytics,daily_sales,,,
+prod_catalog,analytics,customers,dev_catalog,analytics,customers,,,
+```
+
+### How to upload
+
+```bash
+# Create the mappings directory in the volume
+databricks fs mkdir dbfs:<volume_base>/mappings --profile <source-profile>
+
+# Upload your CSV
+databricks fs cp ./catalog_schema_mapping.csv dbfs:<volume_base>/mappings/catalog_schema_mapping.csv --profile <source-profile>
+```
+
+> **Tip:** If source and target use the same catalog/schema (e.g. same-workspace test), create a single row with identical old/new values. The transformation will be a no-op but the file must still exist.
+
+---
+
+## Step 4: Service Principal OAuth Setup (Recommended)
+
+SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in the Generate & Deploy step.
 
 ### 3a. Create a Service Principal
 
@@ -127,7 +181,7 @@ See `src/setup-guides/SP_OAUTH_SETUP.md` for the full detailed guide.
 
 ---
 
-## Step 4: Deploy the Bundle
+## Step 5: Deploy the Bundle
 
 ```bash
 databricks bundle deploy -t <target> --profile <source-profile>
@@ -137,7 +191,7 @@ This syncs all notebooks, helpers, and setup guides to the workspace and creates
 
 ---
 
-## Step 5: Run the Migration
+## Step 6: Run the Migration
 
 ### Step 1 -- Generate Inventory
 
