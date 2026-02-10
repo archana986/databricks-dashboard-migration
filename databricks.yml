@@ -11,11 +11,12 @@
 bundle:
   name: dashboard_migration
 
-# Sync workspace files (helpers directory and notebooks)
+# Sync workspace files (src layout: notebooks, helpers, setup guides)
 sync:
   paths:
-    - helpers
-    - Bundle
+    - src/notebooks
+    - src/helpers
+    - src/setup-guides
 
 # ============================================================================
 # CONFIGURATION VARIABLES
@@ -212,7 +213,7 @@ resources:
       tasks:
         - task_key: generate_inventory
           notebook_task:
-            notebook_path: Bundle/Bundle_01_Inventory_Generation.ipynb
+            notebook_path: src/notebooks/Bundle_01_Inventory_Generation.ipynb
             base_parameters:
               # Core config
               catalog: ${var.catalog}
@@ -264,7 +265,7 @@ resources:
       tasks:
         - task_key: export_and_transform
           notebook_task:
-            notebook_path: Bundle/Bundle_03_Export_and_Transform.ipynb
+            notebook_path: src/notebooks/Bundle_03_Export_and_Transform.ipynb
             base_parameters:
               # Core config
               catalog: ${var.catalog}
@@ -351,7 +352,7 @@ resources:
       tasks:
         - task_key: generate_and_deploy
           notebook_task:
-            notebook_path: Bundle/Bundle_04_Generate_and_Deploy.ipynb
+            notebook_path: src/notebooks/Bundle_04_Generate_and_Deploy.ipynb
             base_parameters:
               # Core config
               catalog: ${var.catalog}
@@ -445,18 +446,18 @@ targets:
   dev:
     mode: development
     workspace:
-      host: https://e2-demo-field-eng.cloud.databricks.com  # UPDATE: Your source workspace URL
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com  # UPDATE: Your source workspace URL
     
     variables:
       # ════════════════════════════════════════════════════════════════════════
       # WORKSPACE CONFIGURATION - UPDATE ALL THESE FOR YOUR ENVIRONMENT
       # ════════════════════════════════════════════════════════════════════════
-      catalog: archana_krish_fe_dsa                          # UPDATE: Your catalog name
-      volume_base: /Volumes/archana_krish_fe_dsa/vizient_deep_dive/dashboard_migration  # UPDATE: Your volume path
-      source_workspace_url: https://e2-demo-field-eng.cloud.databricks.com  # UPDATE: Source workspace
-      target_workspace_url: https://fevm-akrishn-stable-classic-vv5y0k.cloud.databricks.com  # UPDATE: Target workspace
-      warehouse_id: 53af68e7019d2b78                         # UPDATE: Target warehouse ID (or leave empty)
-      warehouse_name: ak-migration                            # UPDATE: Target warehouse name
+      catalog: YOUR_CATALOG                                    # UPDATE: Your catalog name
+      volume_base: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration  # UPDATE: Your volume path
+      source_workspace_url: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com  # UPDATE: Source workspace
+      target_workspace_url: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com  # UPDATE: Target workspace
+      warehouse_id: ""                                         # UPDATE: Target warehouse ID (or leave empty)
+      warehouse_name: ""                                       # UPDATE: Target warehouse name
       
       # ════════════════════════════════════════════════════════════════════════
       # DEPLOYMENT CONFIGURATION (Edit to change behavior, then redeploy bundle)
@@ -470,6 +471,31 @@ targets:
       # ════════════════════════════════════════════════════════════════════════
       dry_run_mode: "true"  # ONLY this parameter can be overridden via CLI: --var="dry_run_mode=false"
   
+  # ──────────────────────────────────────────────────────────────────────────
+  # AZURE TEST: Azure workspaces with SP OAuth
+  # ──────────────────────────────────────────────────────────────────────────
+  # USAGE: databricks bundle deploy -t azure-test --profile source-azure
+  #        databricks bundle run <job> -t azure-test --profile source-azure
+  # ──────────────────────────────────────────────────────────────────────────
+  azure-test:
+    mode: development
+    workspace:
+      host: https://YOUR-AZURE-SOURCE.azuredatabricks.net       # UPDATE: Source Azure workspace
+      root_path: /Users/YOUR-USER@domain.com/Migrationtools     # UPDATE: Your workspace path
+
+    variables:
+      source_workspace_url: https://YOUR-AZURE-SOURCE.azuredatabricks.net  # UPDATE
+      target_workspace_url: https://YOUR-AZURE-TARGET.azuredatabricks.net  # UPDATE
+      catalog: YOUR_CATALOG                                      # UPDATE
+      volume_base: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration  # UPDATE
+      warehouse_id: ""                                           # UPDATE: Target warehouse ID
+      warehouse_name: ""                                         # UPDATE: Target warehouse name
+      deployment_method: "asset_bundle"
+      auth_method: "sp_oauth"
+      sp_secret_scope: "migration_secrets"
+      skip_duplicate_check: "false"
+      dry_run_mode: "true"
+
   # ──────────────────────────────────────────────────────────────────────────
   # STAGING ENVIRONMENT (Template - customize before use)
   # ──────────────────────────────────────────────────────────────────────────
