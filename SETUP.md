@@ -127,9 +127,15 @@ prod_catalog,analytics,customers,dev_catalog,analytics,customers,,,
 # Create the mappings directory in the volume
 databricks fs mkdir dbfs:<volume_base>/mappings --profile <source-profile>
 
-# Upload your CSV
+# Upload your CSV -- file MUST be named exactly catalog_schema_mapping.csv
 databricks fs cp ./catalog_schema_mapping.csv dbfs:<volume_base>/mappings/catalog_schema_mapping.csv --profile <source-profile>
 ```
+
+> **Important:** The file **must** be named exactly `catalog_schema_mapping.csv`. If you uploaded a file with a different name (e.g. `catalog_schema_mapping_template.csv`), rename or copy it:
+> ```bash
+> databricks fs cp dbfs:<volume_base>/mappings/catalog_schema_mapping_template.csv \
+>   dbfs:<volume_base>/mappings/catalog_schema_mapping.csv --profile <source-profile>
+> ```
 
 > **Tip:** If source and target use the same catalog/schema (e.g. same-workspace test), create a single row with identical old/new values. The transformation will be a no-op but the file must still exist.
 
