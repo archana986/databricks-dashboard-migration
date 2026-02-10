@@ -33,8 +33,8 @@ def validate_workspace_connectivity(config: Dict) -> Tuple[bool, List[str]]:
             errors.append("Source workspace URL not configured")
             return False, errors
         
-        # Validate URL format
-        if not re.match(r'https://[a-z0-9-]+\.cloud\.databricks\.com', source_url):
+        # Validate URL format (AWS: .cloud.databricks.com, Azure: .azuredatabricks.net, GCP: .gcp.databricks.com)
+        if not re.match(r'https://[a-z0-9-]+(\.[0-9]+)?\.(cloud\.databricks\.com|azuredatabricks\.net|gcp\.databricks\.com)', source_url):
             errors.append(f"Invalid source workspace URL format: {source_url}")
         
         # Try to connect (this should always work since we're running in source workspace)
