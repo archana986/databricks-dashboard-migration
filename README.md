@@ -29,13 +29,25 @@ SETUP.md                        # Full setup and usage guide
 
 ## Quick Start
 
-1. Clone the repo
-2. Update `databricks.yml` targets with your workspace URLs, catalog, volume, warehouse
-3. Set up Service Principal OAuth (recommended) -- see [SETUP.md](SETUP.md)
-4. Deploy: `databricks bundle deploy -t <target> --profile <source-profile>`
-5. Run Steps 1-4 in order
+```bash
+# 1. Clone
+git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
+cd dashboard-migration
 
-**For full setup instructions, SP OAuth configuration, and troubleshooting, see [SETUP.md](SETUP.md).**
+# 2. Configure -- edit databricks.yml with your workspace URLs, catalog, volume, warehouse
+#    (keep changes local, do not commit real values)
+
+# 3. Deploy
+databricks bundle deploy -t <target> --profile <source-profile>
+
+# 4. Run migration steps 1-4
+databricks bundle run inventory_generation -t <target> --profile <source-profile>
+# ... (Step 2 is manual review in UI) ...
+databricks bundle run export_transform -t <target> --profile <source-profile>
+databricks bundle run generate_deploy -t <target> --profile <source-profile>
+```
+
+**For full setup instructions including SP OAuth, see [SETUP.md](SETUP.md).**
 
 ## Migration Workflow
 

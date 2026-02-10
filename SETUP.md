@@ -20,8 +20,21 @@ How to set up and use this Databricks Dashboard Migration toolkit for your own p
 ## Step 1: Clone the Repository
 
 ```bash
-git clone <your-repo-url>
-cd <repo-root>
+git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
+cd dashboard-migration
+```
+
+After cloning, verify the structure:
+
+```
+dashboard-migration/
+  databricks.yml              # Bundle config: variables, targets (edit this)
+  resources/migration_jobs.yml # Job definitions (no edits needed)
+  src/notebooks/              # Migration notebooks (Steps 1-4)
+  src/helpers/                # Python modules
+  src/setup-guides/           # SP OAuth docs + secrets notebook
+  SETUP.md                    # This file
+  README.md                   # Project overview
 ```
 
 ---
