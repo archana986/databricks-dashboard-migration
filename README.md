@@ -20,8 +20,9 @@ Before you begin, verify all items below. See [SETUP.md](SETUP.md) for detailed 
 | 8 | **SP credentials stored** (if using SP OAuth) | `databricks secrets list-secrets migration_secrets --profile <source>` -- must contain `sp_client_id` and `sp_client_secret` |
 | 9 | **Node type configured** | Set `node_type_id` in your target's variables -- see table below |
 | 10 | **Catalog/schema mapping CSV** | Upload `catalog_schema_mapping.csv` (exact name required) to `<volume_base>/mappings/` -- see [SETUP.md](SETUP.md) for format |
-| 11 | **Target workspace folder** | `databricks workspace list /Shared/Migrated_Dashboards_V2 --profile <target>` -- create with `databricks workspace mkdirs /Shared/Migrated_Dashboards_V2 --profile <target>` if missing |
-| 12 | **Bundle validates** | `databricks bundle validate -t <target> --profile <source>` -- must show `Validation OK!` |
+| 11 | **Target tables exist** | Verify referenced tables exist on target: `databricks tables list <target_catalog>.<target_schema> --profile <target>` -- dashboards will fail if tables are missing |
+| 12 | **Target workspace folder** | `databricks workspace list /Shared/Migrated_Dashboards_V2 --profile <target>` -- create with `databricks workspace mkdirs /Shared/Migrated_Dashboards_V2 --profile <target>` if missing |
+| 13 | **Bundle validates** | `databricks bundle validate -t <target> --profile <source>` -- must show `Validation OK!` |
 
 ### Cloud-specific node types
 

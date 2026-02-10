@@ -141,9 +141,27 @@ databricks fs cp ./catalog_schema_mapping.csv dbfs:<volume_base>/mappings/catalo
 
 ---
 
-## Step 4: Create Target Workspace Folder
+## Step 4: Verify Target Tables Exist
 
-Step 4 (Generate & Deploy) deploys migrated dashboards into a folder on the **target** workspace. The default path is `/Shared/Migrated_Dashboards_V2`. This folder **must exist** before running a live deploy.
+Dashboards reference tables in their SQL queries. Before migration, verify that all referenced tables exist on the target workspace with the correct catalog/schema names (after applying your mapping transformations).
+
+```bash
+# List tables in the target catalog/schema
+databricks tables list <target_catalog>.<target_schema> --profile <target-profile>
+```
+
+If tables are missing on the target:
+- **Option 1:** Create/migrate the tables to the target workspace first
+- **Option 2:** Update your mapping CSV to point to existing tables on target
+- **Option 3:** Use the same workspace for source and target (testing scenario)
+
+> **Important:** The catalog/schema names in this command should match the **new_catalog** and **new_schema** values from your `catalog_schema_mapping.csv`, not the source catalog/schema.
+
+---
+
+## Step 5: Create Target Workspace Folder
+
+The final deployment step (4b) deploys migrated dashboards into a folder on the **target** workspace. The default path is `/Shared/Migrated_Dashboards_V2`. This folder **must exist** before running the deployment.
 
 ```bash
 # Check if the folder exists on the target workspace
@@ -162,7 +180,7 @@ databricks workspace mkdirs /Shared/Migrated_Dashboards_V2 --profile <target-pro
 
 ---
 
-## Step 5: Service Principal OAuth Setup (Recommended)
+## Step 6: Service Principal OAuth Setup (Recommended)
 
 SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4 (Generate & Deploy).
 
@@ -208,7 +226,7 @@ See `src/setup-guides/SP_OAUTH_SETUP.md` for the full detailed guide.
 
 ---
 
-## Step 6: Deploy the Bundle
+## Step 7: Deploy the Bundle
 
 ```bash
 databricks bundle deploy -t <target> --profile <source-profile>
@@ -218,7 +236,7 @@ This syncs all notebooks, helpers, and setup guides to the workspace and creates
 
 ---
 
-## Step 7: Run the Migration
+## Step 8: Run the Migration
 
 ### Step 1 -- Generate Inventory
 
