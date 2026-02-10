@@ -147,19 +147,24 @@ def convert_permissions_for_bundle(permissions_data: Dict) -> List[Dict]:
         for perm in permissions_data['permissions']:
             principal_type = perm.get('principal_type', '')
             principal = perm.get('principal', '')
-            level = perm.get('level', 'CAN_VIEW')
+            level = perm.get('level', 'CAN_READ')
             
-            # Map CSV permission levels to bundle format
+            # Skip admin group permissions - cannot be modified via API
+            if principal_type == 'group' and principal.lower() == 'admins':
+                continue
+            
+            # Map CSV permission levels to bundle format (for Lakeview dashboards)
+            # Valid levels: CAN_EDIT, CAN_MANAGE, CAN_READ, CAN_RUN
             if 'MANAGE' in level.upper():
                 level = 'CAN_MANAGE'
             elif 'EDIT' in level.upper():
                 level = 'CAN_EDIT'
             elif 'RUN' in level.upper():
                 level = 'CAN_RUN'
-            elif 'READ' in level.upper():
-                level = 'CAN_VIEW'
+            elif 'READ' in level.upper() or 'VIEW' in level.upper():
+                level = 'CAN_READ'  # CAN_VIEW -> CAN_READ for dashboards
             else:
-                level = 'CAN_VIEW'
+                level = 'CAN_READ'  # Default to CAN_READ
             
             bundle_perm = {'level': level}
             
@@ -180,19 +185,26 @@ def convert_permissions_for_bundle(permissions_data: Dict) -> List[Dict]:
     acl_list = permissions_data.get('access_control_list', [])
     
     for acl in acl_list:
+        # Skip admin group permissions - cannot be modified via API
+        if acl.get('group_name') and acl['group_name'].lower() == 'admins':
+            continue
+        
         # Get permission level (use first/highest)
-        level = 'CAN_VIEW'  # Default
+        level = 'CAN_READ'  # Default
         if acl.get('all_permissions') and len(acl['all_permissions']) > 0:
             perm_str = acl['all_permissions'][0]
-            # Map to bundle permission levels
+            # Map to bundle permission levels (for Lakeview dashboards)
+            # Valid levels: CAN_EDIT, CAN_MANAGE, CAN_READ, CAN_RUN
             if 'MANAGE' in perm_str.upper():
                 level = 'CAN_MANAGE'
             elif 'EDIT' in perm_str.upper():
                 level = 'CAN_EDIT'
             elif 'RUN' in perm_str.upper():
                 level = 'CAN_RUN'
+            elif 'READ' in perm_str.upper() or 'VIEW' in perm_str.upper():
+                level = 'CAN_READ'  # CAN_VIEW -> CAN_READ for dashboards
             else:
-                level = 'CAN_VIEW'
+                level = 'CAN_READ'
         
         perm = {'level': level}
         

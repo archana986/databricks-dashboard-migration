@@ -190,14 +190,19 @@ echo ""
 TEMP_DIR=$(mktemp -d)
 trap "rm -rf $TEMP_DIR" EXIT
 
-if [ "$APPLY_PERMISSIONS" = "true" ]; then
+# Always download permissions CSV if either permissions or schedules are being applied
+# (schedules need it for dashboard name mapping)
+if [ "$APPLY_PERMISSIONS" = "true" ] || [ "$APPLY_SCHEDULES" = "true" ]; then
     PERMISSIONS_CSV_PATH="dbfs:${VOLUME_BASE}/exported/all_permissions.csv"
     log_info "Downloading permissions: ${PERMISSIONS_CSV_PATH}"
     
     if ! databricks fs cp "${PERMISSIONS_CSV_PATH}" "${TEMP_DIR}/all_permissions.csv" --profile "$SOURCE_PROFILE" --overwrite 2>&1; then
         log_error "Failed to download permissions CSV"
-        log_warning "Skipping permissions application"
-        APPLY_PERMISSIONS=false
+        if [ "$APPLY_PERMISSIONS" = "true" ]; then
+            log_warning "Skipping permissions application"
+            APPLY_PERMISSIONS=false
+        fi
+        # Note: Schedules may still work if they have dashboard_name in the CSV
     else
         PERM_COUNT=$(tail -n +2 "${TEMP_DIR}/all_permissions.csv" | wc -l | tr -d ' ')
         log_success "Downloaded permissions (${PERM_COUNT} entries)"
@@ -237,7 +242,10 @@ import sys
 import json
 import csv
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.dashboards import Schedule, CronSchedule, Subscription
+from databricks.sdk.service.dashboards import (
+    Schedule, CronSchedule, Subscription, SchedulePauseStatus,
+    Subscriber, SubscriptionSubscriberUser
+)
 from databricks.sdk.service.iam import AccessControlRequest, PermissionLevel
 
 def main():
@@ -257,10 +265,30 @@ def main():
     print(f"\n📋 Finding deployed dashboards in {args.target_path}...")
     deployed_dashboards = {}
     for dash in target_client.lakeview.list():
-        if dash.parent_path and dash.parent_path.startswith(args.target_path):
-            deployed_dashboards[dash.display_name] = dash.dashboard_id
+        # Get full dashboard details to check parent_path (list() doesn't include it)
+        try:
+            full_dash = target_client.lakeview.get(dash.dashboard_id)
+            if full_dash.parent_path and full_dash.parent_path.startswith(args.target_path):
+                deployed_dashboards[dash.display_name] = dash.dashboard_id
+        except Exception as e:
+            # Skip dashboards we can't access
+            pass
     
     print(f"   Found {len(deployed_dashboards)} dashboard(s)")
+    
+    def normalize_name(name):
+        """Normalize dashboard names by replacing underscores with spaces."""
+        return name.replace('_', ' ')
+    
+    # Build mapping from old dashboard IDs to normalized names (from permissions CSV)
+    old_id_to_name = {}
+    if args.permissions_csv:
+        with open(args.permissions_csv, 'r') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                old_id = row['dashboard_id']
+                dash_name = normalize_name(row['dashboard_name'])
+                old_id_to_name[old_id] = dash_name
     
     # Apply permissions
     if args.permissions_csv:
@@ -272,23 +300,32 @@ def main():
             dashboard_perms = {}
             
             for row in reader:
-                dash_name = row['dashboard_name']
+                dash_name = normalize_name(row['dashboard_name'])
                 if dash_name not in dashboard_perms:
                     dashboard_perms[dash_name] = []
                 
                 principal_type = row['principal_type']
                 principal = row['principal']
-                level = row['permission_level']
+                level = row['permission_level'].upper()
                 
-                # Map permission level
-                if 'MANAGE' in level.upper():
+                # Skip admin group - cannot be modified via API
+                if principal_type == 'group' and principal.lower() == 'admins':
+                    continue
+                
+                # Map permission level for Lakeview dashboards
+                # Valid levels: CAN_EDIT, CAN_MANAGE, CAN_READ, CAN_RUN
+                if 'MANAGE' in level:
                     perm_level = PermissionLevel.CAN_MANAGE
-                elif 'RUN' in level.upper():
+                elif 'RUN' in level:
                     perm_level = PermissionLevel.CAN_RUN
-                elif 'EDIT' in level.upper():
+                elif 'EDIT' in level:
                     perm_level = PermissionLevel.CAN_EDIT
+                elif 'READ' in level or 'VIEW' in level:
+                    perm_level = PermissionLevel.CAN_READ
                 else:
-                    perm_level = PermissionLevel.CAN_VIEW
+                    # Unknown level, skip
+                    print(f"   ⚠️  Skipping unknown permission level '{level}' for {principal}")
+                    continue
                 
                 dashboard_perms[dash_name].append({
                     'principal_type': principal_type,
@@ -300,8 +337,33 @@ def main():
             if dash_name in deployed_dashboards:
                 dashboard_id = deployed_dashboards[dash_name]
                 
+                # Check existing permissions
+                new_perms_count = 0
+                try:
+                    existing_perms = target_client.permissions.get("dashboards", dashboard_id)
+                    existing_principals = set()
+                    if hasattr(existing_perms, 'access_control_list') and existing_perms.access_control_list:
+                        for acl in existing_perms.access_control_list:
+                            if hasattr(acl, 'user_name') and acl.user_name:
+                                existing_principals.add(('user', acl.user_name))
+                            elif hasattr(acl, 'group_name') and acl.group_name:
+                                existing_principals.add(('group', acl.group_name))
+                            elif hasattr(acl, 'service_principal_name') and acl.service_principal_name:
+                                existing_principals.add(('service_principal', acl.service_principal_name))
+                    
+                    # Count only new permissions
+                    for p in perms:
+                        if (p['principal_type'], p['principal']) not in existing_principals:
+                            new_perms_count += 1
+                    
+                    if new_perms_count == 0:
+                        print(f"   ⏭️  Permissions already set for: {dash_name}")
+                        continue
+                except Exception:
+                    new_perms_count = len(perms)  # If can't read existing, treat all as new
+                
                 if args.dry_run:
-                    print(f"   [DRY RUN] Would apply {len(perms)} permission(s) to: {dash_name}")
+                    print(f"   [DRY RUN] Would apply {new_perms_count} new permission(s) to: {dash_name}")
                 else:
                     acrs = []
                     for perm in perms:
@@ -316,8 +378,8 @@ def main():
                     
                     try:
                         target_client.permissions.update("dashboards", dashboard_id, access_control_list=acrs)
-                        perms_applied += len(perms)
-                        print(f"   ✅ Applied {len(perms)} permission(s) to: {dash_name}")
+                        perms_applied += new_perms_count
+                        print(f"   ✅ Applied {new_perms_count} new permission(s) to: {dash_name}")
                     except Exception as e:
                         print(f"   ❌ Failed to apply permissions to {dash_name}: {e}")
         
@@ -333,12 +395,15 @@ def main():
             reader = csv.DictReader(f)
             
             for row in reader:
-                dash_name = row['dashboard_name'] if 'dashboard_name' in row else None
                 dash_id_from_csv = row['dashboard_id']
                 
-                # Find dashboard name from ID if not in CSV
-                if not dash_name:
-                    # Map old ID to new name (best effort)
+                # Get dashboard name - from CSV or from mapping
+                if 'dashboard_name' in row and row['dashboard_name']:
+                    dash_name = normalize_name(row['dashboard_name'])
+                elif dash_id_from_csv in old_id_to_name:
+                    dash_name = old_id_to_name[dash_id_from_csv]
+                else:
+                    # No name available, skip
                     continue
                 
                 if dash_name not in deployed_dashboards:
@@ -356,46 +421,75 @@ def main():
                     # Skip schedules without cron expression
                     continue
                 
+                # Check if schedule already exists
+                existing_schedule = None
+                try:
+                    schedules_list = list(target_client.lakeview.list_schedules(dashboard_id=new_dashboard_id))
+                    if schedules_list:
+                        existing_schedule = schedules_list[0]
+                        print(f"   ⏭️  Schedule already exists for: {dash_name}")
+                except Exception:
+                    pass
+                
                 if args.dry_run:
-                    print(f"   [DRY RUN] Would create schedule for: {dash_name}")
+                    if existing_schedule:
+                        print(f"   [DRY RUN] Schedule exists, would check subscriptions for: {dash_name}")
+                    else:
+                        print(f"   [DRY RUN] Would create schedule for: {dash_name}")
                 else:
-                    try:
-                        # Create schedule
-                        schedule = target_client.lakeview.create_schedule(
-                            dashboard_id=new_dashboard_id,
-                            schedule=Schedule(
-                                display_name=f"{dash_name} Schedule",
-                                cron_schedule=CronSchedule(
-                                    quartz_cron_expression=cron_expr,
-                                    timezone_id=timezone
-                                ),
-                                pause_status="PAUSED" if paused else "UNPAUSED"
+                    if not existing_schedule:
+                        try:
+                            # Create schedule
+                            pause_status_enum = SchedulePauseStatus.PAUSED if paused else SchedulePauseStatus.UNPAUSED
+                            
+                            schedule = target_client.lakeview.create_schedule(
+                                dashboard_id=new_dashboard_id,
+                                schedule=Schedule(
+                                    display_name=f"{dash_name} Schedule",
+                                    cron_schedule=CronSchedule(
+                                        quartz_cron_expression=cron_expr,
+                                        timezone_id=timezone
+                                    ),
+                                    pause_status=pause_status_enum
+                                )
                             )
-                        )
-                        
-                        scheds_applied += 1
-                        print(f"   ✅ Created schedule for: {dash_name}")
-                        
-                        # Create subscriptions
-                        if subscriptions_json and subscriptions_json != '[]':
-                            try:
-                                subs_list = json.loads(subscriptions_json)
-                                for sub in subs_list:
-                                    user_id = sub.get('subscriber', {}).get('user_id')
-                                    if user_id:
-                                        target_client.lakeview.create_subscription(
-                                            dashboard_id=new_dashboard_id,
-                                            schedule_id=schedule.schedule_id,
-                                            subscription=Subscription(
-                                                subscriber={'user_id': user_id}
+                            
+                            scheds_applied += 1
+                            print(f"   ✅ Created schedule for: {dash_name}")
+                            existing_schedule = schedule
+                        except Exception as e:
+                            print(f"   ❌ Failed to create schedule for {dash_name}: {e}")
+                            continue
+                    
+                    # Handle subscriptions (for both new and existing schedules)
+                    if existing_schedule and subscriptions_json and subscriptions_json != '[]':
+                        try:
+                            # Get existing subscriptions
+                            existing_subs = list(target_client.lakeview.list_subscriptions(
+                                dashboard_id=new_dashboard_id,
+                                schedule_id=existing_schedule.schedule_id
+                            ))
+                            existing_user_ids = {s.subscriber.user_subscriber.user_id 
+                                               for s in existing_subs 
+                                               if s.subscriber and s.subscriber.user_subscriber}
+                            
+                            # Add missing subscriptions
+                            subs_list = json.loads(subscriptions_json)
+                            for sub in subs_list:
+                                user_id = sub.get('subscriber', {}).get('user_id')
+                                if user_id and user_id not in existing_user_ids:
+                                    target_client.lakeview.create_subscription(
+                                        dashboard_id=new_dashboard_id,
+                                        schedule_id=existing_schedule.schedule_id,
+                                        subscription=Subscription(
+                                            subscriber=Subscriber(
+                                                user_subscriber=SubscriptionSubscriberUser(user_id=user_id)
                                             )
                                         )
-                                        subs_applied += 1
-                            except json.JSONDecodeError:
-                                pass
-                    
-                    except Exception as e:
-                        print(f"   ❌ Failed to create schedule for {dash_name}: {e}")
+                                    )
+                                    subs_applied += 1
+                        except (json.JSONDecodeError, Exception) as e:
+                            pass
         
         print(f"\n✅ Total schedules created: {scheds_applied}")
         print(f"✅ Total subscriptions created: {subs_applied}")
@@ -420,7 +514,8 @@ echo ""
 
 PYTHON_ARGS="--target-profile $TARGET_PROFILE --target-path $TARGET_PARENT_PATH"
 
-if [ "$APPLY_PERMISSIONS" = "true" ]; then
+# Always pass permissions CSV if it exists (needed for schedule name mapping)
+if [ -f "${TEMP_DIR}/all_permissions.csv" ]; then
     PYTHON_ARGS="$PYTHON_ARGS --permissions-csv ${TEMP_DIR}/all_permissions.csv"
 fi
 
