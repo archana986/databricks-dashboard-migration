@@ -54,8 +54,11 @@ Open `databricks.yml` and update the target you plan to use (e.g. `dev` or `azur
 | `target_workspace_url` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
 | `warehouse_id` or `warehouse_name` | Target SQL warehouse | `cb4a76f3c5e28557` or `My Warehouse` |
 | `auth_method` | `"pat"` or `"sp_oauth"` | `"sp_oauth"` (recommended) |
+| `node_type_id` | VM type for standard clusters | `Standard_DS3_v2` (Azure), `i3.xlarge` (AWS), `n1-standard-4` (GCP) |
 
-### Example: updating the `dev` target
+> **Important:** The default `node_type_id` is `i3.xlarge` (AWS). You **must** override it for Azure or GCP workspaces, otherwise `bundle deploy` will fail.
+
+### Example: updating the `dev` target (Azure)
 
 ```yaml
 targets:
@@ -70,6 +73,7 @@ targets:
       target_workspace_url: https://adb-789012.10.azuredatabricks.net
       warehouse_id: "cb4a76f3c5e28557"
       auth_method: "sp_oauth"
+      node_type_id: "Standard_DS3_v2"   # Azure -- required override
       dry_run_mode: "true"
 ```
 

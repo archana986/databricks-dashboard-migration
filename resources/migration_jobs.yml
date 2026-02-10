@@ -219,7 +219,7 @@ resources:
         - job_cluster_key: deploy_cluster
           new_cluster:
             spark_version: "17.3.x-scala2.13"  # Latest LTS - Spark 4.0 uses Scala 2.13
-            node_type_id: "i3.xlarge"          # AWS: i3.xlarge | Azure: Standard_DS3_v2 | GCP: n1-standard-4
+            node_type_id: ${var.node_type_id}   # Configured per target: AWS i3.xlarge, Azure Standard_DS3_v2, GCP n1-standard-4
             num_workers: 1                      # 1 worker (per cluster policy)
             autotermination_minutes: 60
             runtime_engine: STANDARD            # Standard runtime (Photon not needed for API operations)

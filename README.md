@@ -18,7 +18,27 @@ Before you begin, verify all items below. See [SETUP.md](SETUP.md) for detailed 
 | 6 | **SQL warehouse on target** | `databricks warehouses list --profile <target>` -- note the warehouse ID or name |
 | 7 | **Secret scope** (if using SP OAuth) | `databricks secrets list-scopes --profile <source>` -- must contain `migration_secrets` |
 | 8 | **SP credentials stored** (if using SP OAuth) | `databricks secrets list-secrets migration_secrets --profile <source>` -- must contain `sp_client_id` and `sp_client_secret` |
-| 9 | **Bundle validates** | `databricks bundle validate -t <target> --profile <source>` -- must show `Validation OK!` |
+| 9 | **Node type configured** | Set `node_type_id` in your target's variables -- see table below |
+| 10 | **Bundle validates** | `databricks bundle validate -t <target> --profile <source>` -- must show `Validation OK!` |
+
+### Cloud-specific node types
+
+Step 4 (Generate & Deploy) uses a standard cluster for cross-workspace access. Set the `node_type_id` variable in your target:
+
+| Cloud | `node_type_id` value | Notes |
+|---|---|---|
+| **AWS** | `i3.xlarge` | Default -- no change needed |
+| **Azure** | `Standard_DS3_v2` | Must override in your target |
+| **GCP** | `n1-standard-4` | Must override in your target |
+
+Example for Azure in `databricks.yml`:
+
+```yaml
+targets:
+  azure-test:
+    variables:
+      node_type_id: "Standard_DS3_v2"
+```
 
 ## Project Structure
 
