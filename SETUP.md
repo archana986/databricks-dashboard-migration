@@ -236,16 +236,38 @@ Open `src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb` in the Databri
 databricks bundle run export_transform -t <target> --profile <source-profile>
 ```
 
-### Step 4 -- Generate and Deploy
+### Step 4a -- Generate Asset Bundles (runs on source workspace)
 
 ```bash
 # Dry run first (safe default -- preview only, no resources created)
 databricks bundle run generate_deploy -t <target> --profile <source-profile>
 
-# Live deploy (when ready)
+# Live generate (when ready -- generates bundles and writes to UC Volume)
 databricks bundle run generate_deploy -t <target> --profile <source-profile> \
   --var="dry_run_mode=false"
 ```
+
+### Step 4b -- Deploy Asset Bundles to Target (runs from local CLI)
+
+After Step 4a generates the bundles in the UC Volume, deploy them to the target workspace from your local machine:
+
+```bash
+# Dry run -- download bundle but don't deploy (review first)
+./scripts/deploy_asset_bundle.sh \
+  --source-profile <source-profile> \
+  --target-profile <target-profile> \
+  --volume-base <volume_base> \
+  --dry-run
+
+# Live deploy -- download and deploy to target, clean up local files
+./scripts/deploy_asset_bundle.sh \
+  --source-profile <source-profile> \
+  --target-profile <target-profile> \
+  --volume-base <volume_base> \
+  --cleanup
+```
+
+> **Important:** This step requires CLI profiles for **both** source (to download bundles from UC Volume) and target (to deploy dashboards). See Step 5 (SP OAuth) for cross-workspace auth setup.
 
 ---
 

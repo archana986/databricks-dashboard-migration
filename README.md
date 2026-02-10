@@ -82,7 +82,15 @@ databricks bundle deploy -t <target> --profile <source-profile>
 databricks bundle run inventory_generation -t <target> --profile <source-profile>
 # ... (Step 2 is manual review in UI) ...
 databricks bundle run export_transform -t <target> --profile <source-profile>
-databricks bundle run generate_deploy -t <target> --profile <source-profile>
+databricks bundle run generate_deploy -t <target> --profile <source-profile> \
+  --var="dry_run_mode=false"
+
+# 5. Deploy asset bundles to target workspace (from local CLI)
+./scripts/deploy_asset_bundle.sh \
+  --source-profile <source-profile> \
+  --target-profile <target-profile> \
+  --volume-base <volume_base> \
+  --cleanup
 ```
 
 **For full setup instructions including SP OAuth, see [SETUP.md](SETUP.md).**
@@ -94,7 +102,8 @@ databricks bundle run generate_deploy -t <target> --profile <source-profile>
 | **1** | Generate inventory | `databricks bundle run inventory_generation -t <target>` |
 | **2** | Review and approve (UI) | Open `Bundle_02` notebook in workspace |
 | **3** | Export and transform | `databricks bundle run export_transform -t <target>` |
-| **4** | Generate and deploy | `databricks bundle run generate_deploy -t <target>` |
+| **4a** | Generate asset bundles | `databricks bundle run generate_deploy -t <target> --var="dry_run_mode=false"` |
+| **4b** | Deploy to target workspace | `./scripts/deploy_asset_bundle.sh --source-profile <src> --target-profile <tgt> --volume-base <vol> --cleanup` |
 
 ## Key Design Decisions
 
