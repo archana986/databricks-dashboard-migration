@@ -4,6 +4,22 @@ Migrate Databricks Lakeview dashboards across workspaces with catalog/schema tra
 
 **Why this toolkit instead of Terraform?** Terraform's Databricks provider doesn't support Lakeview dashboard migration, cross-workspace catalog remapping, or automatic permissions/schedule preservation. See [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) for a full comparison and decision guide.
 
+## Prerequisites Checklist
+
+Before you begin, verify all items below. See [SETUP.md](SETUP.md) for detailed instructions on each.
+
+| # | Requirement | How to verify |
+|---|---|---|
+| 1 | **Databricks CLI v0.218.0+** | `databricks version` |
+| 2 | **Source workspace CLI profile** | `databricks auth profiles` -- must show **Valid: YES** for your source profile |
+| 3 | **Target workspace CLI profile** | Same command -- must show **Valid: YES** for your target profile |
+| 4 | **Unity Catalog + schema** | `databricks catalogs list --profile <source>` and `databricks schemas list <catalog> --profile <source>` |
+| 5 | **UC volume for artifacts** | `databricks volumes list <catalog> <schema> --profile <source>` -- must contain a `dashboard_migration` volume |
+| 6 | **SQL warehouse on target** | `databricks warehouses list --profile <target>` -- note the warehouse ID or name |
+| 7 | **Secret scope** (if using SP OAuth) | `databricks secrets list-scopes --profile <source>` -- must contain `migration_secrets` |
+| 8 | **SP credentials stored** (if using SP OAuth) | `databricks secrets list-secrets migration_secrets --profile <source>` -- must contain `sp_client_id` and `sp_client_secret` |
+| 9 | **Bundle validates** | `databricks bundle validate -t <target> --profile <source>` -- must show `Validation OK!` |
+
 ## Project Structure
 
 ```
