@@ -348,13 +348,34 @@ def apply_permissions_sdk(
     permissions: List[PermissionDefinition]
 ):
     """
-    Apply permissions to a dashboard using SDK.
+    Apply permissions to a dashboard using SDK (idempotent).
     
     Args:
         client: WorkspaceClient for target workspace
         dashboard_id: ID of the dashboard
         permissions: List of PermissionDefinition objects
     """
+    # Check existing permissions
+    try:
+        existing_perms = client.permissions.get("dashboards", dashboard_id)
+        existing_principals = set()
+        if hasattr(existing_perms, 'access_control_list') and existing_perms.access_control_list:
+            for acl in existing_perms.access_control_list:
+                if hasattr(acl, 'user_name') and acl.user_name:
+                    existing_principals.add(('user', acl.user_name))
+                elif hasattr(acl, 'group_name') and acl.group_name:
+                    existing_principals.add(('group', acl.group_name))
+                elif hasattr(acl, 'service_principal_name') and acl.service_principal_name:
+                    existing_principals.add(('service_principal', acl.service_principal_name))
+        
+        # Count only new permissions
+        new_count = sum(1 for p in permissions if (p.principal_type, p.principal) not in existing_principals)
+        if new_count == 0:
+            print(f"      ⏭️  Permissions already set")
+            return
+    except Exception:
+        pass  # If can't check, apply all
+    
     acl_list = []
     
     for perm in permissions:
@@ -367,15 +388,17 @@ def apply_permissions_sdk(
         elif perm.principal_type == "service_principal":
             acr.service_principal_name = perm.principal
         
-        # Map permission level
+        # Map permission level (fix CAN_VIEW -> CAN_READ for Lakeview)
         if perm.level == "CAN_VIEW":
-            acr.permission_level = PermissionLevel.CAN_VIEW
+            acr.permission_level = PermissionLevel.CAN_READ  # Lakeview uses CAN_READ
         elif perm.level == "CAN_RUN":
             acr.permission_level = PermissionLevel.CAN_RUN
         elif perm.level == "CAN_MANAGE":
             acr.permission_level = PermissionLevel.CAN_MANAGE
+        elif perm.level == "CAN_EDIT":
+            acr.permission_level = PermissionLevel.CAN_EDIT
         else:
-            acr.permission_level = PermissionLevel.CAN_VIEW  # Default fallback
+            acr.permission_level = PermissionLevel.CAN_READ  # Default fallback
         
         acl_list.append(acr)
     
@@ -393,7 +416,7 @@ def apply_schedules_sdk(
     schedules: List[ScheduleDefinition]
 ) -> tuple:
     """
-    Apply schedules and subscriptions to a dashboard using SDK.
+    Apply schedules and subscriptions to a dashboard using SDK (idempotent).
     
     Args:
         client: WorkspaceClient for target workspace
@@ -406,53 +429,88 @@ def apply_schedules_sdk(
     schedules_created = 0
     subscriptions_created = 0
     
+    # Check if schedules already exist
+    existing_schedule = None
+    try:
+        existing_schedules = list(client.lakeview.list_schedules(dashboard_id=dashboard_id))
+        if existing_schedules:
+            existing_schedule = existing_schedules[0]
+            print(f"      ⏭️  Schedule already exists")
+    except Exception:
+        pass
+    
     for schedule_def in schedules:
-        # Create schedule
-        schedule = client.lakeview.create_schedule(
-            dashboard_id=dashboard_id,
-            schedule=Schedule(
-                display_name=schedule_def.display_name,
-                cron_schedule=CronSchedule(
-                    quartz_cron_expression=schedule_def.quartz_cron_expression,
-                    timezone_id=schedule_def.timezone_id
-                ),
-                pause_status=schedule_def.pause_status
-            )
-        )
-        schedules_created += 1
-        
-        # Create subscriptions for this schedule
-        for sub_def in schedule_def.subscriptions:
+        # Use existing schedule or create new one
+        if not existing_schedule:
             try:
-                # Build subscription based on subscriber type
-                subscriber = None
-                if sub_def.user_id:
-                    subscriber = Subscriber(
-                        user_subscriber=SubscriptionSubscriberUser(
-                            user_id=sub_def.user_id
-                        )
+                # Create schedule
+                schedule = client.lakeview.create_schedule(
+                    dashboard_id=dashboard_id,
+                    schedule=Schedule(
+                        display_name=schedule_def.display_name,
+                        cron_schedule=CronSchedule(
+                            quartz_cron_expression=schedule_def.quartz_cron_expression,
+                            timezone_id=schedule_def.timezone_id
+                        ),
+                        pause_status=schedule_def.pause_status
                     )
-                elif sub_def.destination_id:
-                    subscriber = Subscriber(
-                        destination_subscriber=SubscriptionSubscriberDestination(
-                            destination_id=sub_def.destination_id
-                        )
-                    )
-                
-                if subscriber:
-                    client.lakeview.create_subscription(
-                        dashboard_id=dashboard_id,
-                        schedule_id=schedule.schedule_id,
-                        subscription=Subscription(
-                            subscriber=subscriber
-                        )
-                    )
-                    subscriptions_created += 1
-                else:
-                    print(f"⚠️  Skipping subscription - no user_id or destination_id provided")
+                )
+                schedules_created += 1
+                existing_schedule = schedule
+            except Exception as sched_err:
+                print(f"⚠️  Failed to create schedule: {sched_err}")
+                continue
+        
+        # Handle subscriptions (for both new and existing schedules)
+        if existing_schedule:
+            # Get existing subscriptions
+            try:
+                existing_subs = list(client.lakeview.list_subscriptions(
+                    dashboard_id=dashboard_id,
+                    schedule_id=existing_schedule.schedule_id
+                ))
+                existing_user_ids = {s.subscriber.user_subscriber.user_id 
+                                   for s in existing_subs 
+                                   if s.subscriber and s.subscriber.user_subscriber}
+            except Exception:
+                existing_user_ids = set()
             
-            except Exception as sub_err:
-                print(f"⚠️  Warning: Failed to create subscription: {sub_err}")
+            # Create subscriptions for this schedule
+            for sub_def in schedule_def.subscriptions:
+                try:
+                    # Skip if already exists
+                    if sub_def.user_id and sub_def.user_id in existing_user_ids:
+                        continue
+                    
+                    # Build subscription based on subscriber type
+                    subscriber = None
+                    if sub_def.user_id:
+                        subscriber = Subscriber(
+                            user_subscriber=SubscriptionSubscriberUser(
+                                user_id=sub_def.user_id
+                            )
+                        )
+                    elif sub_def.destination_id:
+                        subscriber = Subscriber(
+                            destination_subscriber=SubscriptionSubscriberDestination(
+                                destination_id=sub_def.destination_id
+                            )
+                        )
+                    
+                    if subscriber:
+                        client.lakeview.create_subscription(
+                            dashboard_id=dashboard_id,
+                            schedule_id=existing_schedule.schedule_id,
+                            subscription=Subscription(
+                                subscriber=subscriber
+                            )
+                        )
+                        subscriptions_created += 1
+                    else:
+                        print(f"⚠️  Skipping subscription - no user_id or destination_id provided")
+                
+                except Exception as sub_err:
+                    print(f"⚠️  Warning: Failed to create subscription: {sub_err}")
     
     return schedules_created, subscriptions_created
 
