@@ -141,9 +141,30 @@ databricks fs cp ./catalog_schema_mapping.csv dbfs:<volume_base>/mappings/catalo
 
 ---
 
-## Step 4: Service Principal OAuth Setup (Recommended)
+## Step 4: Create Target Workspace Folder
 
-SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in the Generate & Deploy step.
+Step 4 (Generate & Deploy) deploys migrated dashboards into a folder on the **target** workspace. The default path is `/Shared/Migrated_Dashboards_V2`. This folder **must exist** before running a live deploy.
+
+```bash
+# Check if the folder exists on the target workspace
+databricks workspace list /Shared/Migrated_Dashboards_V2 --profile <target-profile>
+
+# If it doesn't exist, create it
+databricks workspace mkdirs /Shared/Migrated_Dashboards_V2 --profile <target-profile>
+```
+
+> **Note:** You can customize this path by setting `target_parent_path` in your target's variables in `databricks.yml`, or by overriding it at runtime:
+> ```bash
+> databricks bundle run generate_deploy -t <target> \
+>   --params target_parent_path=/Shared/My_Custom_Path \
+>   --profile <source-profile>
+> ```
+
+---
+
+## Step 5: Service Principal OAuth Setup (Recommended)
+
+SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4 (Generate & Deploy).
 
 ### 3a. Create a Service Principal
 
@@ -187,7 +208,7 @@ See `src/setup-guides/SP_OAUTH_SETUP.md` for the full detailed guide.
 
 ---
 
-## Step 5: Deploy the Bundle
+## Step 6: Deploy the Bundle
 
 ```bash
 databricks bundle deploy -t <target> --profile <source-profile>
@@ -197,7 +218,7 @@ This syncs all notebooks, helpers, and setup guides to the workspace and creates
 
 ---
 
-## Step 6: Run the Migration
+## Step 7: Run the Migration
 
 ### Step 1 -- Generate Inventory
 
