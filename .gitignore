@@ -1,4 +1,13 @@
-# Python
+# ============================================================================
+# Databricks Dashboard Migration Toolkit - .gitignore
+# ============================================================================
+# Only exemplar files are tracked. Everything else is ignored.
+# Exemplar structure:
+#   databricks.yml, resources/, src/, scripts/, ip-detection/
+#   SETUP.md, README.md, WHY_THIS_TOOLKIT.md, catalog_schema_mapping_template.csv
+# ============================================================================
+
+# ----- Python -----
 __pycache__/
 *.py[cod]
 *$py.class
@@ -7,50 +16,52 @@ __pycache__/
 venv/
 env/
 
-# Databricks
+# ----- Databricks bundle state -----
 .databricks/
+ip-detection/.databricks/
 
-# User-specific files
-catalog_schema_mapping.csv
-config/config.yaml  # Legacy config file (no longer used - config is in databricks.yml)
-dev_config.py  # For local interactive testing only
+# ----- Archive (old docs, scripts, notebooks - not part of exemplar) -----
+archive/
+_archive/
+_local_archive/
 
-# Test/output files
+# ----- Temp / test / output files -----
+temp/
+_temp/
+bundle_deploy_*/
+dashboard_bundle/
 transformed/
 exported/
+
+# ----- Dashboard / data files (generated at runtime) -----
 *.lvdash.json
 *_dashboard.json
 *.csv
 !catalog_schema_mapping_template.csv
 
-# macOS
+# ----- User-specific local config -----
+catalog_schema_mapping.csv
+config/config.yaml
+dev_config.py
+
+# ----- macOS -----
 .DS_Store
 
-# IDE
+# ----- IDE / editor -----
 .vscode/
 .idea/
+.cursor/
 *.swp
 *.swo
 
-# Archives
-_archive/
-archive/
-_local_archive/
-
-# Temp/test files
-temp/
-_temp/
-bundle_deploy_*/
-dashboard_bundle/
-
-# Local personal files (not for GitHub)
+# ----- Local personal notes (move to archive/ if keeping) -----
+cursor_*.md
+LOCAL_RUN_LOG.md
+EXECUTION_STEPS_*.md
+EXEMPLAR_REORG_PLAN.md
+execution_steps_*.md
 GIT_PUSH_GUIDE.md
 GIT_WORKFLOW.md
 CONFIG_SKIP_WORKTREE_GUIDE.md
 CONFIG_SETUP_COMPLETE.md
 localplandoc.md
-LOCAL_RUN_LOG.md
-execution_steps_feb9.md
-EXECUTION_STEPS_FEB9_CHECKLIST.md
-EXEMPLAR_REORG_PLAN.md
-WHY_THIS_TOOLKIT.md
