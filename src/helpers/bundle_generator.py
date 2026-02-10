@@ -133,13 +133,50 @@ def convert_permissions_for_bundle(permissions_data: Dict) -> List[Dict]:
     Convert exported permissions JSON to bundle format.
     
     Args:
-        permissions_data: Permissions from get_dashboard_permissions
+        permissions_data: Permissions from get_dashboard_permissions OR load_permissions_from_csv
+                         Can have either 'access_control_list' (from API) or 'permissions' (from CSV)
     
     Returns:
         List of permission dictionaries in bundle format
     """
     bundle_permissions = []
     
+    # Handle two formats: API format (access_control_list) or CSV format (permissions)
+    if 'permissions' in permissions_data and isinstance(permissions_data['permissions'], list):
+        # CSV format: {permissions: [{principal, principal_type, level}, ...]}
+        for perm in permissions_data['permissions']:
+            principal_type = perm.get('principal_type', '')
+            principal = perm.get('principal', '')
+            level = perm.get('level', 'CAN_VIEW')
+            
+            # Map CSV permission levels to bundle format
+            if 'MANAGE' in level.upper():
+                level = 'CAN_MANAGE'
+            elif 'EDIT' in level.upper():
+                level = 'CAN_EDIT'
+            elif 'RUN' in level.upper():
+                level = 'CAN_RUN'
+            elif 'READ' in level.upper():
+                level = 'CAN_VIEW'
+            else:
+                level = 'CAN_VIEW'
+            
+            bundle_perm = {'level': level}
+            
+            if principal_type == 'user':
+                bundle_perm['user_name'] = principal
+            elif principal_type == 'group':
+                bundle_perm['group_name'] = principal
+            elif principal_type == 'service_principal':
+                bundle_perm['service_principal_name'] = principal
+            else:
+                continue
+            
+            bundle_permissions.append(bundle_perm)
+        
+        return bundle_permissions
+    
+    # API format: {access_control_list: [{user_name, group_name, all_permissions}, ...]}
     acl_list = permissions_data.get('access_control_list', [])
     
     for acl in acl_list:

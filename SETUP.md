@@ -54,11 +54,8 @@ Open `databricks.yml` and update the target you plan to use (e.g. `dev` or `azur
 | `target_workspace_url` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
 | `warehouse_id` or `warehouse_name` | Target SQL warehouse | `cb4a76f3c5e28557` or `My Warehouse` |
 | `auth_method` | `"pat"` or `"sp_oauth"` | `"sp_oauth"` (recommended) |
-| `node_type_id` | VM type for standard clusters | `Standard_DS3_v2` (Azure), `i3.xlarge` (AWS), `n1-standard-4` (GCP) |
 
-> **Important:** The default `node_type_id` is `i3.xlarge` (AWS). You **must** override it for Azure or GCP workspaces, otherwise `bundle deploy` will fail.
-
-### Example: updating the `dev` target (Azure)
+### Example: updating the `dev` target
 
 ```yaml
 targets:
@@ -73,7 +70,6 @@ targets:
       target_workspace_url: https://adb-789012.10.azuredatabricks.net
       warehouse_id: "cb4a76f3c5e28557"
       auth_method: "sp_oauth"
-      node_type_id: "Standard_DS3_v2"   # Azure -- required override
       dry_run_mode: "true"
 ```
 
@@ -81,108 +77,9 @@ targets:
 
 ---
 
-## Step 3: Upload Catalog/Schema Mapping CSV
+## Step 3: Service Principal OAuth Setup (Recommended)
 
-Step 3 (Export & Transform) uses a mapping CSV to remap catalog, schema, and table references when transforming dashboards for the target workspace. You **must** upload this file before running Export & Transform.
-
-### CSV location
-
-```
-<volume_base>/mappings/catalog_schema_mapping.csv
-```
-
-For example: `/Volumes/my_catalog/my_schema/dashboard_migration/mappings/catalog_schema_mapping.csv`
-
-### CSV format
-
-| Column | Required | Description |
-|---|---|---|
-| `old_catalog` | Yes | Source catalog name |
-| `old_schema` | Yes | Source schema name |
-| `old_table` | No | Source table name (leave blank for schema-level mapping) |
-| `new_catalog` | Yes | Target catalog name |
-| `new_schema` | Yes | Target schema name |
-| `new_table` | No | Target table name (leave blank for schema-level mapping) |
-| `old_volume` | No | Source volume path to remap |
-| `new_volume` | No | Target volume path |
-
-### Example: schema-level mapping (most common)
-
-```csv
-old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
-my_source_catalog,my_source_schema,,my_target_catalog,my_target_schema,,,
-```
-
-### Example: table-level mapping
-
-```csv
-old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
-prod_catalog,analytics,daily_sales,dev_catalog,analytics,daily_sales,,,
-prod_catalog,analytics,customers,dev_catalog,analytics,customers,,,
-```
-
-### How to upload
-
-```bash
-# Create the mappings directory in the volume
-databricks fs mkdir dbfs:<volume_base>/mappings --profile <source-profile>
-
-# Upload your CSV -- file MUST be named exactly catalog_schema_mapping.csv
-databricks fs cp ./catalog_schema_mapping.csv dbfs:<volume_base>/mappings/catalog_schema_mapping.csv --profile <source-profile>
-```
-
-> **Important:** The file **must** be named exactly `catalog_schema_mapping.csv`. If you uploaded a file with a different name (e.g. `catalog_schema_mapping_template.csv`), rename or copy it:
-> ```bash
-> databricks fs cp dbfs:<volume_base>/mappings/catalog_schema_mapping_template.csv \
->   dbfs:<volume_base>/mappings/catalog_schema_mapping.csv --profile <source-profile>
-> ```
-
-> **Tip:** If source and target use the same catalog/schema (e.g. same-workspace test), create a single row with identical old/new values. The transformation will be a no-op but the file must still exist.
-
----
-
-## Step 4: Verify Target Tables Exist
-
-Dashboards reference tables in their SQL queries. Before migration, verify that all referenced tables exist on the target workspace with the correct catalog/schema names (after applying your mapping transformations).
-
-```bash
-# List tables in the target catalog/schema
-databricks tables list <target_catalog>.<target_schema> --profile <target-profile>
-```
-
-If tables are missing on the target:
-- **Option 1:** Create/migrate the tables to the target workspace first
-- **Option 2:** Update your mapping CSV to point to existing tables on target
-- **Option 3:** Use the same workspace for source and target (testing scenario)
-
-> **Important:** The catalog/schema names in this command should match the **new_catalog** and **new_schema** values from your `catalog_schema_mapping.csv`, not the source catalog/schema.
-
----
-
-## Step 5: Create Target Workspace Folder
-
-The final deployment step (4b) deploys migrated dashboards into a folder on the **target** workspace. The default path is `/Shared/Migrated_Dashboards_V2`. This folder **must exist** before running the deployment.
-
-```bash
-# Check if the folder exists on the target workspace
-databricks workspace list /Shared/Migrated_Dashboards_V2 --profile <target-profile>
-
-# If it doesn't exist, create it
-databricks workspace mkdirs /Shared/Migrated_Dashboards_V2 --profile <target-profile>
-```
-
-> **Note:** You can customize this path by setting `target_parent_path` in your target's variables in `databricks.yml`, or by overriding it at runtime:
-> ```bash
-> databricks bundle run generate_deploy -t <target> \
->   --params target_parent_path=/Shared/My_Custom_Path \
->   --profile <source-profile>
-> ```
-
----
-
-## Step 6: Service Principal OAuth Setup (Recommended)
-
-SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4 (Generate & Deploy).
+SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4.
 
 ### 3a. Create a Service Principal
 
@@ -226,7 +123,7 @@ See `src/setup-guides/SP_OAUTH_SETUP.md` for the full detailed guide.
 
 ---
 
-## Step 7: Deploy the Bundle
+## Step 4: Deploy the Bundle
 
 ```bash
 databricks bundle deploy -t <target> --profile <source-profile>
@@ -236,7 +133,7 @@ This syncs all notebooks, helpers, and setup guides to the workspace and creates
 
 ---
 
-## Step 8: Run the Migration
+## Step 5: Run the Migration
 
 ### Step 1 -- Generate Inventory
 
@@ -254,38 +151,64 @@ Open `src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb` in the Databri
 databricks bundle run export_transform -t <target> --profile <source-profile>
 ```
 
-### Step 4a -- Generate Asset Bundles (runs on source workspace)
+### Step 4 -- Generate and Deploy
+
+**IMPORTANT:** This step has two parts:
+1. Generate the dashboard bundles (runs on source workspace)
+2. Deploy bundles to target + apply permissions & schedules (runs locally via CLI)
+
+#### Part A: Generate Dashboard Bundles
 
 ```bash
 # Dry run first (safe default -- preview only, no resources created)
 databricks bundle run generate_deploy -t <target> --profile <source-profile>
 
-# Live generate (when ready -- generates bundles and writes to UC Volume)
+# Live generation (when ready) - creates bundles in UC Volume
 databricks bundle run generate_deploy -t <target> --profile <source-profile> \
   --var="dry_run_mode=false"
 ```
 
-### Step 4b -- Deploy Asset Bundles to Target (runs from local CLI)
+This generates asset bundles and stores them in the UC Volume at `/Volumes/<catalog>/<schema>/dashboard_migration/bundles/`.
 
-After Step 4a generates the bundles in the UC Volume, deploy them to the target workspace from your local machine:
+#### Part B: Deploy to Target Workspace
+
+After Part A completes successfully, deploy the generated bundles:
 
 ```bash
-# Dry run -- download bundle but don't deploy (review first)
+# Download bundle from volume, deploy to target, and apply permissions & schedules
 ./scripts/deploy_asset_bundle.sh \
   --source-profile <source-profile> \
   --target-profile <target-profile> \
-  --volume-base <volume_base> \
-  --dry-run
-
-# Live deploy -- download and deploy to target, clean up local files
-./scripts/deploy_asset_bundle.sh \
-  --source-profile <source-profile> \
-  --target-profile <target-profile> \
-  --volume-base <volume_base> \
-  --cleanup
+  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration
 ```
 
-> **Important:** This step requires CLI profiles for **both** source (to download bundles from UC Volume) and target (to deploy dashboards). See Step 5 (SP OAuth) for cross-workspace auth setup.
+This script will:
+1. Download the bundle from UC Volume
+2. Deploy dashboards to target workspace via `databricks bundle deploy`
+3. **Automatically apply permissions** from the exported metadata
+4. **Automatically apply schedules** from the exported metadata
+
+> **Note:** Permissions and schedules MUST be applied after bundle deployment because:
+> - Asset Bundles don't support schedules natively (Databricks limitation)
+> - Permissions in bundles may not apply correctly in all scenarios
+> - The script ensures metadata is properly synchronized
+
+#### Optional: Manual Metadata Application
+
+If you need to re-apply permissions or schedules without redeploying dashboards:
+
+```bash
+./scripts/apply_metadata.sh \
+  --source-profile <source-profile> \
+  --target-profile <target-profile> \
+  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration \
+  --target-path /Shared/Migrated_Dashboards_V2
+```
+
+Options:
+- `--skip-permissions` - Skip permission application
+- `--skip-schedules` - Skip schedule application
+- `--dry-run` - Preview what would be applied without actually applying
 
 ---
 

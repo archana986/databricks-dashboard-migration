@@ -265,6 +265,40 @@ if [ "$CLEANUP" = "true" ] && [ "$DRY_RUN" != "true" ]; then
 fi
 
 ################################################################################
+# Step 4: Apply Permissions and Schedules
+################################################################################
+
+if [ "$DRY_RUN" != "true" ]; then
+    log_info "Step 4: Applying permissions and schedules to deployed dashboards..."
+    echo ""
+    
+    # Check if apply_metadata.sh exists
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    APPLY_METADATA_SCRIPT="${SCRIPT_DIR}/apply_metadata.sh"
+    
+    if [ -f "$APPLY_METADATA_SCRIPT" ]; then
+        log_info "Running metadata application script..."
+        
+        if bash "$APPLY_METADATA_SCRIPT" \
+            --source-profile "$SOURCE_PROFILE" \
+            --target-profile "$TARGET_PROFILE" \
+            --volume-base "$VOLUME_BASE" \
+            --target-path "/Shared/Migrated_Dashboards_V2" \
+            2>&1; then
+            log_success "Permissions and schedules applied successfully"
+        else
+            log_warning "Metadata application had errors (see above)"
+            log_info "You can manually run: ./scripts/apply_metadata.sh --source-profile $SOURCE_PROFILE --target-profile $TARGET_PROFILE --volume-base $VOLUME_BASE"
+        fi
+    else
+        log_warning "apply_metadata.sh not found - skipping permissions and schedules"
+        log_info "Dashboards deployed but permissions and schedules need manual application"
+        log_info "Create and run: ./scripts/apply_metadata.sh --source-profile $SOURCE_PROFILE --target-profile $TARGET_PROFILE --volume-base $VOLUME_BASE"
+    fi
+    echo ""
+fi
+
+################################################################################
 # Summary
 ################################################################################
 
@@ -280,12 +314,20 @@ if [ "$DRY_RUN" = "true" ]; then
     echo "Next steps:"
     echo "   1. Review bundle: cd ${LOCAL_DIR} && ls -la"
     echo "   2. Deploy: databricks bundle deploy -t dev --profile ${TARGET_PROFILE}"
+    echo "   3. Apply metadata: ./scripts/apply_metadata.sh --source-profile ${SOURCE_PROFILE} --target-profile ${TARGET_PROFILE} --volume-base ${VOLUME_BASE}"
 else
-    log_success "Dashboards deployed to target workspace!"
+    log_success "Dashboards deployed with permissions and schedules!"
+    echo ""
+    echo "Deployment Summary:"
+    echo "   ✅ Dashboards deployed to target workspace"
+    echo "   ✅ Permissions applied (if available)"
+    echo "   ✅ Schedules applied (if available)"
     echo ""
     echo "Next steps:"
-    echo "   1. Verify dashboards in target workspace"
-    echo "   2. Run IP cleanup if needed:"
+    echo "   1. Verify dashboards in target workspace UI"
+    echo "   2. Check permissions (Share button on dashboards)"
+    echo "   3. Check schedules (Schedule button on dashboards)"
+    echo "   4. Run IP cleanup if needed:"
     echo "      ./scripts/cleanup_ip_acl.sh --target-profile ${TARGET_PROFILE}"
 fi
 echo ""

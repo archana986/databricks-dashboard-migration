@@ -125,7 +125,7 @@ variables:
   
   permissions_dry_run:
     description: If true simulates permission application without actually applying (true/false)
-    default: "true"
+    default: "false"
   
   # ──────────────────────────────────────────────────────────────────────────
   # SCHEDULE & SUBSCRIPTION OPTIONS
@@ -270,22 +270,22 @@ targets:
   azure-test:
     mode: development
     workspace:
-      host: https://YOUR-AZURE-SOURCE.azuredatabricks.net       # UPDATE: Source Azure workspace
-      root_path: /Users/YOUR-USER@domain.com/Migrationtools     # UPDATE: Your workspace path
+      host: https://adb-7405619365260661.1.azuredatabricks.net
+      root_path: /Users/archana.krishnamurthy@databricks.com/Migrationtools
 
     variables:
-      source_workspace_url: https://YOUR-AZURE-SOURCE.azuredatabricks.net  # UPDATE
-      target_workspace_url: https://YOUR-AZURE-TARGET.azuredatabricks.net  # UPDATE
-      catalog: YOUR_CATALOG                                      # UPDATE
-      volume_base: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration  # UPDATE
-      warehouse_id: ""                                           # UPDATE: Target warehouse ID
-      warehouse_name: ""                                         # UPDATE: Target warehouse name
+      source_workspace_url: https://adb-7405619365260661.1.azuredatabricks.net
+      target_workspace_url: https://adb-7405605758331030.10.azuredatabricks.net
+      catalog: catalog_archakzhgd_y6tndn
+      volume_base: /Volumes/catalog_archakzhgd_y6tndn/edl_migration_assets/dashboard_migration
+      warehouse_id: "cb4a76f3c5e28557"
+      warehouse_name: "EDL-Asset-Migration"
       deployment_method: "asset_bundle"
       auth_method: "sp_oauth"
       sp_secret_scope: "migration_secrets"
       skip_duplicate_check: "false"
       dry_run_mode: "true"
-      node_type_id: "Standard_DS3_v2"                   # Azure VM type
+      node_type_id: "Standard_DS3_v2"
 
   # ──────────────────────────────────────────────────────────────────────────
   # STAGING ENVIRONMENT (Template - customize before use)
