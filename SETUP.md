@@ -117,9 +117,9 @@ databricks secrets put-secret migration_secrets sp_client_secret --profile <sour
 
 ### 3e. Verify (Optional)
 
-After deploying the bundle (Step 4), open `src/setup-guides/Setup_Migration_Secrets.ipynb` in the Databricks workspace UI. Set the config cell and run the verification cells to confirm connectivity.
+After deploying the bundle (Step 4), open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in the Databricks workspace UI. Set the config cell and run the verification cells to confirm connectivity.
 
-See `src/setup-guides/SP_OAUTH_SETUP.md` for the full detailed guide.
+See [SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) for the full detailed guide.
 
 ---
 
@@ -143,7 +143,7 @@ databricks bundle run inventory_generation -t <target> --profile <source-profile
 
 ### Step 2 -- Manual Review and Approval (UI)
 
-Open `src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb` in the Databricks workspace. Review dashboards, apply filters, type CONFIRM to save the approved inventory.
+Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the Databricks workspace. Review dashboards, apply filters, type CONFIRM to save the approved inventory.
 
 ### Step 3 -- Export and Transform
 
@@ -219,8 +219,8 @@ After setup or any structural change, verify with:
 1. `databricks bundle validate -t <target>` -- catches YAML/path errors
 2. `databricks bundle deploy -t <target> --profile <source-profile>` -- syncs code to workspace
 3. Run each job (inventory_generation, export_transform, generate_deploy) -- confirm no `ModuleNotFoundError`
-4. Open `Bundle_02` in UI -- run path cell + cells that import helpers
-5. Open `Setup_Migration_Secrets.ipynb` in UI -- run config, path, verify, test connection
+4. Open [Bundle_02](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in UI -- run path cell + cells that import helpers
+5. Open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in UI -- run config, path, verify, test connection
 
 ---
 

@@ -185,6 +185,6 @@ If the bundle was already destroyed, this command will safely indicate no resour
 
 ## Related Documentation
 
-- [IP_DETECTION_BUNDLE_IMPROVEMENTS.md](../IP_DETECTION_BUNDLE_IMPROVEMENTS.md) - Detailed technical documentation
-- [SUMMARY_IP_DETECTION_IMPROVEMENTS.md](../SUMMARY_IP_DETECTION_IMPROVEMENTS.md) - Quick reference guide
-- [IP_ACL_AUTOMATION_GUIDE.md](../IP_ACL_AUTOMATION_GUIDE.md) - Complete IP whitelisting workflow
+- [README.md](../README.md) - Main project documentation
+- [SETUP.md](../SETUP.md) - Full setup and migration steps
+- Main repo `scripts/` - [auto_setup_ip_acl.sh](../scripts/auto_setup_ip_acl.sh), [cleanup_ip_acl.sh](../scripts/cleanup_ip_acl.sh) for IP whitelisting

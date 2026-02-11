@@ -395,5 +395,5 @@ variables:
 
 ## Related Documentation
 
-- [README.md](../README.md) - Main project documentation
-- [ip-detection/README.md](../ip-detection/README.md) - IP detection and whitelisting
+- [README.md](../../README.md) - Main project documentation
+- [ip-detection/README.md](../../ip-detection/README.md) - IP detection and whitelisting
