@@ -2,6 +2,8 @@
 
 How to set up and use this Databricks Dashboard Migration toolkit for your own projects.
 
+**Design:** This toolkit uses **two bundles**—a **source** bundle (run in the source workspace for inventory, export, and transform) and a **target** bundle (run in the target workspace for transfer and install). The catalog (and export volume) is bound to the source workspace for copy/transfer of files; installation runs in the target workspace. See [REQUIREMENTS.md](REQUIREMENTS.md) for the full requirements and assumptions.
+
 ---
 
 ## Prerequisites
@@ -28,11 +30,14 @@ After cloning, verify the structure:
 
 ```
 dashboard-migration/
-  databricks.yml              # Bundle config: variables, targets (edit this)
-  resources/migration_jobs.yml # Job definitions (no edits needed)
-  src/notebooks/              # Migration notebooks (Steps 1-4)
+  source/databricks.yml       # Source bundle (edit for source workspace)
+  source/resources/           # Source job definitions
+  target/databricks.yml       # Target bundle (edit for target workspace)
+  target/resources/           # Target job definitions (transfer + deploy)
+  src/notebooks/              # Migration notebooks (Steps 1-4, transfer, deploy)
   src/helpers/                # Python modules
   src/setup-guides/           # SP OAuth docs + secrets notebook
+  REQUIREMENTS.md             # Migration need, two-bundle design, assumptions
   SETUP.md                    # This file
   README.md                   # Project overview
 ```
@@ -43,43 +48,61 @@ dashboard-migration/
 
 Open `databricks.yml` and update the target you plan to use (e.g. `dev` or `azure-test`).
 
-### Required variables to set
+### Local overrides (recommended)
+
+To avoid committing workspace URLs and catalog names, copy the examples and edit the generated `databricks.local.yml` files (gitignored):
+
+- `source/databricks.local.yml.example` → `source/databricks.local.yml`
+- `target/databricks.local.yml.example` → `target/databricks.local.yml`
+
+**Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore** (see [REQUIREMENTS.md](REQUIREMENTS.md)). Optional single-workspace test notes: [docs/SINGLE_WORKSPACE_OPTIONAL.md](docs/SINGLE_WORKSPACE_OPTIONAL.md).
+
+Add the same **service principal** to **both** workspaces for automation; grant UC access on export and import volumes. See [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) for `run_as` and grants.
+
+### Source bundle (`source/databricks.yml`)
 
 | Variable | What to enter | Example |
 |---|---|---|
 | `workspace.host` | Source workspace URL | `https://adb-123456.1.azuredatabricks.net` |
 | `catalog` | Source catalog name | `my_catalog` |
-| `volume_base` | UC volume path for artifacts | `/Volumes/my_catalog/my_schema/dashboard_migration` |
-| `source_workspace_url` | Source workspace URL | `https://adb-123456.1.azuredatabricks.net` |
-| `target_workspace_url` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
-| `warehouse_id` or `warehouse_name` | Target SQL warehouse | `cb4a76f3c5e28557` or `My Warehouse` |
-| `auth_method` | `"pat"` or `"sp_oauth"` | `"sp_oauth"` (recommended) |
+| `volume_base` | UC **export** volume path for artifacts | `/Volumes/my_catalog/my_schema/dashboard_migration` |
+| `source_workspace_url` | Source workspace URL (display / parameters) | `https://adb-123456.1.azuredatabricks.net` |
 
-### Example: updating the `dev` target
+### Target bundle (`target/databricks.yml`)
+
+| Variable | What to enter | Example |
+|---|---|---|
+| `workspace.host` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
+| `source_catalog` | Catalog that holds the **export** volume | `source_catalog` |
+| `target_catalog` | Catalog that holds the **import** volume | `target_catalog` |
+| `schema` | Schema containing both volumes | `default` |
+| `export_volume` / `import_volume` | Volume **names** (transfer task) | e.g. `dashboard_migration` or distinct export/import names |
+| `volume_base` | Full import volume path | `/Volumes/<target_catalog>/<schema>/<import_volume>` |
+| `target_parent_path` | Workspace folder for new dashboards | `/Shared/Migrated_Dashboards` |
+| `warehouse_id` or `warehouse_name` | Target SQL warehouse | ID or display name |
+
+### Example: source `targets.default` snippet
 
 ```yaml
 targets:
-  dev:
-    mode: development
+  default:
     workspace:
       host: https://adb-123456.1.azuredatabricks.net
     variables:
-      catalog: my_catalog
-      volume_base: /Volumes/my_catalog/my_schema/dashboard_migration
       source_workspace_url: https://adb-123456.1.azuredatabricks.net
-      target_workspace_url: https://adb-789012.10.azuredatabricks.net
-      warehouse_id: "cb4a76f3c5e28557"
-      auth_method: "sp_oauth"
-      dry_run_mode: "true"
+      catalog: my_catalog
+      volume_base: /Volumes/my_catalog/my_schema/dashboard_migration_export
 ```
 
 > **Important:** Do NOT commit your real URLs, catalog names, or warehouse IDs. Keep these changes local only.
 
 ---
 
-## Step 3: Service Principal OAuth Setup (Recommended)
+## Step 3: Service principal (both workspaces) and optional OAuth secrets
 
-SP OAuth is required when `auth_method: "sp_oauth"`. This is the recommended auth method for cross-workspace deployment in Step 4.
+Add the **same service principal** to **source and target** workspaces for automation. Grant **Unity Catalog** access to export/import volumes and the target warehouse (see [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md)).
+
+**OAuth client ID + secret** in a secret scope are for notebooks or tools that use **machine-to-machine** auth (see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md)). The default **transfer + deploy** job path uses the **job run identity** in the target workspace, not cross-workspace OAuth.
 
 ### 3a. Create a Service Principal
 
@@ -117,110 +140,80 @@ databricks secrets put-secret migration_secrets sp_client_secret --profile <sour
 
 ### 3e. Verify (Optional)
 
-After deploying the bundle (Step 4), open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in the Databricks workspace UI. Set the config cell and run the verification cells to confirm connectivity.
+After deploying the **source** bundle, open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in the Databricks workspace UI if you use SP OAuth from notebooks. Set the config cell and run the verification cells to confirm connectivity.
 
 See [SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) for the full detailed guide.
 
 ---
 
-## Step 4: Deploy the Bundle
+## Step 4: Deploy the source bundle (source workspace)
+
+From the repo root:
 
 ```bash
-databricks bundle deploy -t <target> --profile <source-profile>
+cd source
+databricks bundle validate
+databricks bundle deploy --profile <source-profile>
 ```
 
-This syncs all notebooks, helpers, and setup guides to the workspace and creates the three migration jobs.
+This syncs notebooks and helpers into the **source** workspace and registers **two** jobs: `src_dashboard_inventory` and `src_dashboard_export_transform`.
 
 ---
 
-## Step 5: Run the Migration
+## Step 5: Run the migration (source, then target)
 
-### Step 1 -- Generate Inventory
+### 5a. Source workspace — Steps 1–3
 
-```bash
-databricks bundle run inventory_generation -t <target> --profile <source-profile>
-```
-
-### Step 2 -- Manual Review and Approval (UI)
-
-Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the Databricks workspace. Review dashboards, apply filters, type CONFIRM to save the approved inventory.
-
-### Step 3 -- Export and Transform
+**Step 1 — Generate inventory**
 
 ```bash
-databricks bundle run export_transform -t <target> --profile <source-profile>
+cd source
+databricks bundle run src_dashboard_inventory --profile <source-profile>
 ```
 
-### Step 4 -- Generate and Deploy
+**Step 2 — Review and approve (UI)**  
+Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the **source** workspace. Review dashboards, apply filters, type **CONFIRM** to save the approved inventory.
 
-**IMPORTANT:** This step has two parts:
-1. Generate the dashboard bundles (runs on source workspace)
-2. Deploy bundles to target + apply permissions & schedules (runs locally via CLI)
-
-#### Part A: Generate Dashboard Bundles
+**Step 3 — Export and transform**
 
 ```bash
-# Dry run first (safe default -- preview only, no resources created)
-databricks bundle run generate_deploy -t <target> --profile <source-profile>
-
-# Live generation (when ready) - creates bundles in UC Volume
-databricks bundle run generate_deploy -t <target> --profile <source-profile> \
-  --var="dry_run_mode=false"
+databricks bundle run src_dashboard_export_transform --profile <source-profile>
 ```
 
-This generates asset bundles and stores them in the UC Volume at `/Volumes/<catalog>/<schema>/dashboard_migration/bundles/`.
+Artifacts are written under your configured **export volume** (for example `exported/`, `transformed/`, `dashboard_inventory_approved/`, and consolidated CSVs where applicable).
 
-#### Part B: Deploy to Target Workspace
+### 5b. Target workspace — transfer and deploy
 
-After Part A completes successfully, deploy the generated bundles:
+**Deploy the target bundle** (separate host and profile):
 
 ```bash
-# Download bundle from volume, deploy to target, and apply permissions & schedules
-./scripts/deploy_asset_bundle.sh \
-  --source-profile <source-profile> \
-  --target-profile <target-profile> \
-  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration
+cd ../target
+databricks bundle validate
+databricks bundle deploy --profile <target-profile>
 ```
 
-This script will:
-1. Download the bundle from UC Volume
-2. Deploy dashboards to target workspace via `databricks bundle deploy`
-3. **Automatically apply permissions** from the exported metadata
-4. **Automatically apply schedules** from the exported metadata
-
-> **Note:** Permissions and schedules MUST be applied after bundle deployment because:
-> - Asset Bundles don't support schedules natively (Databricks limitation)
-> - Permissions in bundles may not apply correctly in all scenarios
-> - The script ensures metadata is properly synchronized
-
-#### Optional: Manual Metadata Application
-
-If you need to re-apply permissions or schedules without redeploying dashboards:
+**Run transfer + deploy** (one job, two tasks):
 
 ```bash
-./scripts/apply_metadata.sh \
-  --source-profile <source-profile> \
-  --target-profile <target-profile> \
-  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration \
-  --target-path /Shared/Migrated_Dashboards_V2
+databricks bundle run tgt_dashboard_register --profile <target-profile>
 ```
 
-Options:
-- `--skip-permissions` - Skip permission application
-- `--skip-schedules` - Skip schedule application
-- `--dry-run` - Preview what would be applied without actually applying
+This copies data from the **source export volume** to the **target import volume** (same metastore), then creates dashboards under `target_parent_path` and applies permissions/schedules per job parameters.
+
+> **Optional / alternate flows:** Some forks include `Bundle_04_*` notebooks or shell scripts for asset-bundle-based publish paths. This repository’s **default** Databricks Asset Bundle definitions are the jobs above.
 
 ---
 
 ## Verification Checklist
 
-After setup or any structural change, verify with:
+After setup or any structural change:
 
-1. `databricks bundle validate -t <target>` -- catches YAML/path errors
-2. `databricks bundle deploy -t <target> --profile <source-profile>` -- syncs code to workspace
-3. Run each job (inventory_generation, export_transform, generate_deploy) -- confirm no `ModuleNotFoundError`
-4. Open [Bundle_02](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in UI -- run path cell + cells that import helpers
-5. Open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in UI -- run config, path, verify, test connection
+1. `cd source && databricks bundle validate` and `cd target && databricks bundle validate`
+2. Deploy each bundle with the correct profile (`<source-profile>` vs `<target-profile>`)
+3. Run `src_dashboard_inventory`, then `src_dashboard_export_transform` on the source side — confirm no `ModuleNotFoundError`
+4. Run `tgt_dashboard_register` on the target side — confirm transfer and deploy tasks succeed
+5. Open [Bundle_02](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the source UI — run path cell and helper imports if you run it ad hoc
+6. If using SP OAuth from notebooks, open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) and run verify / connection cells
 
 ---
 

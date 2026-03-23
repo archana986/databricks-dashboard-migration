@@ -43,6 +43,8 @@ exported/
 catalog_schema_mapping.csv
 config/config.yaml
 dev_config.py
+source/databricks.local.yml
+target/databricks.local.yml
 
 # ----- macOS -----
 .DS_Store
@@ -53,6 +55,11 @@ dev_config.py
 .cursor/
 *.swp
 *.swo
+
+# ----- Internal / verification docs (not customer-facing) -----
+VERIFICATION_DASHBOARD_MIGRATION.md
+PROBLEM_AND_OPPORTUNITY_STATEMENT.md
+transcripts/
 
 # ----- Local personal notes (move to archive/ if keeping) -----
 cursor_*.md

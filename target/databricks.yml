@@ -1,0 +1,80 @@
+# Target bundle — deploy to target workspace.
+# Transfer from source export volume, then deploy dashboards in this workspace (local WorkspaceClient, OAuth).
+#
+# Deploy: cd target && databricks bundle deploy
+# Run:    databricks bundle run tgt_dashboard_register
+#
+# Auth: databricks auth login -p <target-profile> --host <target-workspace-url>
+
+bundle:
+  name: dashboard-migration-tgt
+
+include:
+  - resources/*.yml
+
+sync:
+  paths:
+    - ../src/notebooks
+    - ../src/helpers
+
+variables:
+  source_catalog:
+    description: Source catalog (holds export volume)
+    default: YOUR_SOURCE_CATALOG
+  target_catalog:
+    description: Target catalog (holds import volume)
+    default: YOUR_TARGET_CATALOG
+  schema:
+    description: Schema name
+    default: default
+  export_volume:
+    description: Export volume name in source catalog
+    default: dashboard_migration
+  import_volume:
+    description: Import volume name in target catalog
+    default: dashboard_migration
+  volume_base:
+    description: Full path to import volume (used by deploy task)
+    default: /Volumes/YOUR_TARGET_CATALOG/default/dashboard_migration
+  exported_path:
+    description: Subdirectory for exported JSONs (relative to volume_base)
+    default: exported
+  transformed_path:
+    description: Subdirectory for transformed JSONs (relative to volume_base)
+    default: transformed
+  target_parent_path:
+    description: Workspace folder path for migrated dashboards
+    default: /Shared/Migrated_Dashboards
+  warehouse_id:
+    description: SQL warehouse ID for dashboard execution
+    default: ""
+  warehouse_name:
+    description: SQL warehouse name (fallback)
+    default: ""
+  apply_permissions:
+    description: Apply permissions to deployed dashboards (true/false)
+    default: "true"
+  apply_schedules:
+    description: Apply schedules and subscriptions (true/false)
+    default: "true"
+  embed_credentials:
+    description: Embed credentials in dashboards (true/false)
+    default: "true"
+  skip_duplicate_check:
+    description: Skip checking for existing dashboards (true/false)
+    default: "false"
+  dry_run_mode:
+    description: Preview only, do not create resources (true/false)
+    default: "false"
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: target-profile
+      host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+    variables:
+      source_catalog: YOUR_SOURCE_CATALOG
+      target_catalog: YOUR_TARGET_CATALOG
+      schema: default
+      volume_base: /Volumes/YOUR_TARGET_CATALOG/default/dashboard_migration

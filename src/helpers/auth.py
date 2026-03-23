@@ -31,15 +31,7 @@ def create_workspace_client(
     auth_config = config['auth']
     auth_method = auth_config['method']
     
-    if auth_method == 'pat':
-        # PAT authentication
-        scope = auth_config['pat']['secret_scope']
-        key = auth_config['pat']['secret_key']
-        token = _get_dbutils().secrets.get(scope=scope, key=key)
-        
-        return WorkspaceClient(host=workspace_url, token=token)
-    
-    elif auth_method == 'service_principal':
+    if auth_method == 'service_principal':
         # Service Principal authentication
         sp_config = auth_config['service_principal']
         
@@ -63,6 +55,8 @@ def create_workspace_client(
         return WorkspaceClient(host=workspace_url)
     
     else:
+        if auth_method == 'pat':
+            raise ValueError("PAT is not supported; use service_principal or oauth in config.")
         raise ValueError(f"Unsupported auth method: {auth_method}")
 
 
@@ -75,9 +69,7 @@ def create_target_workspace_client(
     
     SIMPLIFIED: Single consistent auth method (no OAuth fallback complexity).
     
-    Supported auth methods:
-    1. Service Principal (RECOMMENDED) - if sp_client_id and sp_secret exist
-    2. PAT Token (CURRENT) - if target_workspace_token exists
+    Supported auth: Service Principal only (no PAT). Store sp_client_id and sp_secret in the secret scope.
     
     OAuth is NOT supported for cross-workspace (tokens are workspace-scoped).
     
@@ -118,45 +110,13 @@ def create_target_workspace_client(
             raise RuntimeError(f"SP connected to wrong workspace: {client_host}")
             
     except Exception as e:
-        if "does not exist" not in str(e).lower():
-            print(f"⚠️  Service Principal auth failed: {e}")
-        # Continue to PAT token
-    
-    # Method 2: Try PAT Token
-    try:
-        token = dbutils.secrets.get(secret_scope, "target_workspace_token")
-        
-        client = WorkspaceClient(host=target_url, token=token)
-        
-        # Test connection and verify workspace
-        user = client.current_user.me()
-        client_host = client.config.host.rstrip('/')
-        expected_host = target_url.rstrip('/')
-        
-        if expected_host in client_host or client_host == expected_host:
-            print(f"🔐 AUTH: PAT Token")
-            print(f"   Connected to: {client.config.host}")
-            print(f"   User: {user.user_name}")
-            return client
-        else:
-            raise RuntimeError(f"PAT connected to wrong workspace: {client_host} (expected: {expected_host})")
-            
-    except Exception as e:
-        # PAT token failed
         raise RuntimeError(
             f"Failed to authenticate to target workspace: {target_url}\n\n"
             f"Error: {str(e)}\n\n"
-            f"SETUP REQUIRED: Store credentials in '{secret_scope}' secret scope:\n\n"
-            f"Option 1 - Service Principal (RECOMMENDED):\n"
-            f"  1. Create SP in Account Console\n"
-            f"  2. Assign to both source and target workspaces\n"
-            f"  3. Store credentials:\n"
+            f"SETUP: Store Service Principal credentials in '{secret_scope}' secret scope (no PAT):\n"
+            f"  1. Create SP in Account Console and assign to both source and target workspaces\n"
+            f"  2. Store credentials:\n"
             f"     databricks secrets put-secret {secret_scope} sp_client_id --profile source-workspace\n"
             f"     databricks secrets put-secret {secret_scope} sp_secret --profile source-workspace\n\n"
-            f"Option 2 - PAT Token (CURRENT):\n"
-            f"  1. Generate token in TARGET workspace: {target_url}\n"
-            f"     User Settings → Developer → Access Tokens → Generate New Token\n"
-            f"  2. Store token in SOURCE workspace:\n"
-            f"     databricks secrets put-secret {secret_scope} target_workspace_token --profile source-workspace\n\n"
-            f"NOTE: OAuth is not supported for cross-workspace connections (tokens are workspace-scoped).\n"
+            f"NOTE: OAuth is not supported for cross-workspace; use Service Principal only.\n"
         )

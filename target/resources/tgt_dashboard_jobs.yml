@@ -1,0 +1,41 @@
+# Target workflow: transfer from source export volume, then deploy dashboards in this workspace.
+# Run after src_dashboard_export_transform has written to the source export volume.
+# Uses local WorkspaceClient (OAuth); no cross-workspace auth or IP detection.
+
+resources:
+  jobs:
+    tgt_dashboard_register:
+      name: "[Migration] Target - Transfer & Deploy"
+      description: "Transfer export volume to import volume, then deploy dashboards in this workspace."
+      tags:
+        project: "dashboard-migration"
+        workflow: "lakeview-migration"
+        step: "tgt-deploy"
+      tasks:
+        - task_key: transfer
+          notebook_task:
+            notebook_path: ../src/notebooks/Transfer_Volume_Dashboard.ipynb
+            base_parameters:
+              source_catalog: ${var.source_catalog}
+              target_catalog: ${var.target_catalog}
+              schema: ${var.schema}
+              export_volume: ${var.export_volume}
+              import_volume: ${var.import_volume}
+
+        - task_key: deploy
+          depends_on:
+            - task_key: transfer
+          notebook_task:
+            notebook_path: ../src/notebooks/Deploy_Dashboards_Target.ipynb
+            base_parameters:
+              volume_base: ${var.volume_base}
+              exported_path: ${var.exported_path}
+              transformed_path: ${var.transformed_path}
+              target_parent_path: ${var.target_parent_path}
+              warehouse_id: ${var.warehouse_id}
+              warehouse_name: ${var.warehouse_name}
+              apply_permissions: ${var.apply_permissions}
+              apply_schedules: ${var.apply_schedules}
+              embed_credentials: ${var.embed_credentials}
+              skip_duplicate_check: ${var.skip_duplicate_check}
+              dry_run_mode: ${var.dry_run_mode}

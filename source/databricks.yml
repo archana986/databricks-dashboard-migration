@@ -1,0 +1,82 @@
+# Source bundle — deploy to source workspace.
+# Inventory + export & transform only. Writes to export volume. No target workspace calls.
+#
+# Deploy: cd source && databricks bundle deploy
+# Run:    databricks bundle run src_dashboard_inventory
+#         databricks bundle run src_dashboard_export_transform
+#
+# Auth: databricks auth login -p <source-profile> --host <source-workspace-url>
+
+bundle:
+  name: dashboard-migration-src
+
+include:
+  - resources/*.yml
+
+# Sync shared src from repo root (parent of source/)
+sync:
+  paths:
+    - ../src/notebooks
+    - ../src/helpers
+    - ../src/setup-guides
+
+variables:
+  source_workspace_url:
+    description: Source workspace URL (for display; jobs run here)
+    default: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+  catalog:
+    description: Source catalog to scan for dashboards
+    default: YOUR_CATALOG
+  volume_base:
+    description: Export volume path (format /Volumes/catalog/schema/volume)
+    default: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration
+  inventory_path:
+    description: Subdirectory for inventory CSV (Step 1 output)
+    default: dashboard_inventory
+  inventory_approved_path:
+    description: Subdirectory for approved inventory (Step 2 input)
+    default: dashboard_inventory_approved
+  exported_path:
+    description: Subdirectory for exported dashboard JSONs
+    default: exported
+  transformed_path:
+    description: Subdirectory for transformed dashboard JSONs
+    default: transformed
+  mappings_path:
+    description: Subdirectory for mapping CSV files
+    default: mappings
+  audit_lookback_days:
+    description: Days to look back for audit data
+    default: "90"
+  transformation_enabled:
+    description: Apply catalog/schema/table transformations (true/false)
+    default: "true"
+  mapping_csv_path:
+    description: Path to mapping CSV (relative to volume_base)
+    default: mappings/catalog_schema_mapping.csv
+  capture_permissions:
+    description: Export permissions from source (true/false)
+    default: "true"
+  capture_schedules:
+    description: Export schedules/subscriptions from source (true/false)
+    default: "true"
+  archive_old_files:
+    description: Archive old exported/transformed files before new run (true/false)
+    default: "true"
+  archive_min_age_minutes:
+    description: Only archive files older than this many minutes
+    default: "5"
+  force_archive_all:
+    description: Archive all files regardless of age (true/false)
+    default: "false"
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: source-profile
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+    variables:
+      source_workspace_url: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      catalog: YOUR_CATALOG
+      volume_base: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration

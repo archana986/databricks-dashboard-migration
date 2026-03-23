@@ -1,301 +1,222 @@
-# Databricks Dashboard Migration Toolkit
+# Lakeview dashboard migration toolkit
 
-Migrate Databricks Lakeview dashboards across workspaces with catalog/schema transformations, **permission and schedule migration**, and cross-workspace authentication via Service Principal OAuth or PAT tokens. Fully deployable with Databricks Asset Bundles (DABs).
+Move **Databricks Lakeview (AI/BI) dashboards** from a **source workspace** to a **target workspace** while keeping **permissions**, **schedules**, and **subscriptions** aligned with your new **catalog and schema** names.
 
-**Why this toolkit instead of Terraform?** Terraform's Databricks provider doesn't support Lakeview dashboard migration, cross-workspace catalog remapping, or automatic permissions/schedule preservation. See [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) for a full comparison, decision guide, and Mermaid diagrams.
+This toolkit uses **two Databricks Asset Bundles**: you deploy and run the **source** bundle only in the source workspace, and the **target** bundle only in the target workspace. A **shared Unity Catalog metastore** (and volumes under it) carries the files between workspaces—no cross-workspace passwords in the notebooks for the main path.
+
+**Who this is for:** Teams doing workspace consolidation, environment promotion (e.g. non-prod → prod), or catalog changes where dashboards must be recreated in a new workspace with updated table references.
 
 ---
 
-## Migration Workflow at a Glance
+## What you get
+
+| Output | Description |
+|--------|-------------|
+| **Inventory** | List of dashboards to migrate (you review and approve in the UI). |
+| **Export + transform** | Dashboard definitions plus metadata written to a Unity Catalog **export volume**. |
+| **Transfer + install** | In the target workspace, files are copied to an **import volume**, then dashboards are created under your chosen **workspace folder**. |
+| **Optional mapping** | Catalog/schema/table rewrites driven by a mapping file on the volume when transformation is enabled. |
+
+**Out of scope for Terraform:** Lakeview objects, cross-workspace dashboard install, and rich schedule/subscription metadata are not covered by the Databricks Terraform provider the same way—this toolkit is built for that gap. See [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) for a comparison.
+
+---
+
+## How it fits together (two workspaces)
 
 ```mermaid
-flowchart LR
-    subgraph source [Source Workspace]
-        S1[Step 1: Inventory] --> S2[Step 2: Review in UI]
-        S2 --> S3[Step 3: Export & Transform]
-        S3 --> S4a[Step 4a: Generate Bundles]
-    end
-    subgraph artifacts [UC Volume]
-        CSV[CSVs: permissions, schedules, mapping]
-        BUNDLE[Asset bundle YAML]
-    end
-    subgraph target [Target Workspace]
-        S4b[Step 4b: Deploy + Apply Metadata]
-    end
-    S4a --> CSV
-    S4a --> BUNDLE
-    BUNDLE --> S4b
-    CSV --> S4b
-    S4b --> D[Dashboards + Permissions + Schedules + Subscriptions]
+flowchart TB
+  subgraph acct [Databricks account]
+    SP[Service principal]
+  end
+  subgraph src_ws [Source workspace]
+    SJOBS[Source bundle jobs]
+    SVOL[(Export volume in source catalog)]
+    SJOBS --> SVOL
+  end
+  subgraph metastore [Shared Unity Catalog metastore]
+    SVOL -.->|same metastore| TVOL
+  end
+  subgraph tgt_ws [Target workspace]
+    TJOBS[Target bundle job]
+    TVOL[(Import volume in target catalog)]
+    DASH[Dashboards in target folder]
+    TJOBS --> TVOL
+    TJOBS --> DASH
+  end
+  SP -->|access| src_ws
+  SP -->|access| tgt_ws
 ```
 
-**In short:** Steps 1–3 run on the source workspace and write CSVs + transformed definitions to a UC Volume. Step 4a generates the deployable bundle; Step 4b deploys to the target and applies permissions, schedules, and subscriptions automatically (no extra flags).
+**Typical roles**
+
+- **Humans** use **two CLI profiles** (or OAuth logins)—one for source, one for target.
+- **Automation** uses a **service principal** that is added to **both** workspaces and granted Unity Catalog rights on the export volume (source catalog) and import volume (target catalog), plus use of the target **SQL warehouse** and permissions on the **target folder** for dashboards.
 
 ---
 
-## Project Structure
+## End-to-end workflow
 
-```
-dashboard-migration/
-  databricks.yml                  # Bundle config: variables, targets, include
-  resources/
-    migration_jobs.yml             # DAB job definitions (migration jobs)
-  src/
-    notebooks/                    # Migration notebooks (Steps 1-4)
-      Bundle_01_Inventory_Generation.ipynb
-      Bundle_02_Review_and_Approve_Inventory.ipynb
-      Bundle_03_Export_and_Transform.ipynb
-      Bundle_04_Generate_and_Deploy.ipynb
-      Bundle_04_Generate_and_Deploy_V2.ipynb
-      Bundle_IP_ACL_Setup.ipynb
-    helpers/                     # Python modules (auth, export, transform, deploy)
-    setup-guides/                 # SP OAuth setup doc + secrets verification notebook
-      Setup_Migration_Secrets.ipynb
-      SP_OAUTH_SETUP.md
-  scripts/                        # Shell scripts
-    apply_metadata.sh              # Applies permissions, schedules, subscriptions after deploy
-    deploy_asset_bundle.sh         # Step 4b: deploy bundle + run apply_metadata.sh
-    auto_setup_ip_acl.sh
-    cleanup_ip_acl.sh
-  ip-detection/                   # Sub-bundle for cluster IP detection
-  SETUP.md                        # Full setup and usage guide
-  PREREQUISITES_CHECKLIST.md      # Pre-flight checklist before migration
+```mermaid
+sequenceDiagram
+  participant You
+  participant Src as Source workspace
+  participant Vol as UC volumes
+  participant Tgt as Target workspace
+  You->>Src: Deploy source bundle
+  You->>Src: Run inventory job
+  You->>Src: Review and approve in Bundle_02
+  You->>Src: Run export and transform job
+  Src->>Vol: Write inventory, export, transform, CSVs
+  You->>Tgt: Deploy target bundle
+  You->>Tgt: Run transfer and deploy job
+  Tgt->>Vol: Read export path, write import path
+  Tgt->>Tgt: Create dashboards, apply metadata
 ```
 
 ---
 
-## Prerequisites
+## Quick start (two workspaces)
 
-- **Databricks CLI** v0.218.0+ installed
-- Two CLI profiles in `~/.databrickscfg` (source and target workspaces)
-- Workspace admin (or sufficient permissions) on source and target
-- **Unity Catalog volume** for migration artifacts
-- **SQL warehouse** in target workspace
-- **Target tables exist** in target catalog/schema (dashboards reference them)
-- For Step 4: **Service Principal with OAuth** (recommended) or a PAT token
+**Prerequisites (short):** Databricks CLI, **two profiles** (`YOUR_SOURCE_PROFILE`, `YOUR_TARGET_PROFILE`), admin or sufficient rights on both workspaces, **same UC metastore** for source and target catalogs, volumes created, target **SQL warehouse**, and target **tables** that match transformed references. See [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md).
 
-For a full pre-flight checklist, see [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md).
-
----
-
-## Quick Start
-
-```bash
-# 1. Clone
-git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
-cd dashboard-migration
-
-# 2. Configure — edit databricks.yml with your workspace URLs, catalog, volume, warehouse
-#    (keep changes local; do not commit real values)
-
-# 3. Deploy (one-time)
-databricks bundle deploy -t <target> --profile <source-profile>
-
-# 4. Run migration steps 1–4
-databricks bundle run inventory_generation -t <target> --profile <source-profile>
-# Step 2: open Bundle_02 in UI, review, type CONFIRM to save approved inventory
-databricks bundle run export_transform -t <target> --profile <source-profile>
-databricks bundle run generate_deploy -t <target> --var="dry_run_mode=false" --profile <source-profile>
-
-# 5. Deploy to target and apply permissions, schedules, subscriptions (Step 4b)
-./scripts/deploy_asset_bundle.sh \
-  --source-profile <source-profile> \
-  --target-profile <target-profile> \
-  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration
-```
-
-**For full setup (including SP OAuth and troubleshooting), see [SETUP.md](SETUP.md).**
-
----
-
-## Migration Workflow (Steps in Detail)
-
-| Step | What | How |
-|------|------|-----|
-| **1** | Generate inventory | `databricks bundle run inventory_generation -t <target> --profile <source-profile>` |
-| **2** | Review and approve (UI) | Open `Bundle_02` in workspace; review, filter, type **CONFIRM** to save |
-| **3** | Export and transform | `databricks bundle run export_transform -t <target> --profile <source-profile>` |
-| **4a** | Generate bundles | `databricks bundle run generate_deploy -t <target> --var="dry_run_mode=false" --profile <source-profile>` |
-| **4b** | Deploy to target + apply metadata | `./scripts/deploy_asset_bundle.sh --source-profile <src> --target-profile <tgt> --volume-base <path>` |
-
-> **Note:** Step 4b deploys dashboards via the asset bundle, then runs `scripts/apply_metadata.sh` to apply **permissions**, **schedules**, and **subscriptions** from the CSVs. No extra flags are required; the script is idempotent (safe to re-run).
-
-### What Gets Applied in Step 4b
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  Step 4b (deploy_asset_bundle.sh → apply_metadata.sh)                          │
-├─────────────────────────────────────────────────────────────────────────────┤
-│  ✅ Dashboards       — from asset bundle YAML                                 │
-│  ✅ Permissions      — from all_permissions.csv (users, groups, levels)      │
-│  ✅ Schedules        — from all_schedules.csv (cron, timezone, pause status) │
-│  ✅ Subscriptions    — from schedule/subscriber data (email notifications)   │
-│  All applied by default; idempotent (skips what already exists).              │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
-
----
-
-## Setup (Summary)
-
-### 1. Clone the repo
+### 1. Clone and configure locally
 
 ```bash
 git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
 cd dashboard-migration
 ```
 
-### 2. Configure `databricks.yml`
+Edit **`source/databricks.yml`** for the **source** workspace host, catalog, and **export** volume path. Edit **`target/databricks.yml`** for the **target** workspace host, source/target catalog names for the transfer step, **import** volume path, **warehouse**, and **target_parent_path**. Do not commit real URLs or secrets.
 
-Edit `databricks.yml` for your target (e.g. `dev` or `azure-test`):
+**Optional:** Copy `source/databricks.local.yml.example` → `source/databricks.local.yml` and `target/databricks.local.yml.example` → `target/databricks.local.yml` (see `.gitignore`) so your machine keeps overrides for testing.
 
-| Variable | Example |
-|----------|---------|
-| `catalog` | `my_catalog` |
-| `volume_base` | `/Volumes/my_catalog/my_schema/dashboard_migration` |
-| `source_workspace_url` | `https://source.cloud.databricks.com` |
-| `target_workspace_url` | `https://target.cloud.databricks.com` |
-| `warehouse_id` or `warehouse_name` | Target SQL warehouse |
-| `auth_method` | `"sp_oauth"` (recommended) or `"pat"` |
-| `sp_secret_scope` | `"migration_secrets"` |
+### 2. Service principal in both workspaces (recommended)
 
-Set `workspace.host` to your **source** workspace URL.
+1. In **Account Console**, create (or choose) a **service principal**.
+2. Add that SP to **both** the source and the target **workspace** (Permissions → at least **User**-level workspace access, or as required by your org).
+3. Grant the SP **Unity Catalog** privileges to read the **export volume** and read/write the **import volume**, and to **use** the target **warehouse** and the **schemas** that contain those volumes. See [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) for grant patterns (use your real catalog and volume names in SQL).
+4. If you use **OAuth client credentials** for any step that calls another workspace from a notebook, store **client ID and secret** in a **secret scope** on the workspace where that notebook runs—see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md).
 
-### 3. Service Principal OAuth (recommended for Step 4)
+To run the **target** job as the SP (so Lakeview API calls use the SP identity), set `run_as` on the job in `target/resources/tgt_dashboard_jobs.yml` as described in [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md).
 
-When `auth_method: "sp_oauth"`:
-
-1. Create a Service Principal in Account Console (User management → Service principals).
-2. Add the SP to both source and target workspaces.
-3. Generate an OAuth secret for the SP; save Client ID and secret.
-4. Store credentials in the source workspace secret scope:
+### 3. Deploy and run (source)
 
 ```bash
-databricks secrets create-scope migration_secrets --profile <source-profile>
-databricks secrets put-secret migration_secrets sp_client_id --profile <source-profile>
-databricks secrets put-secret migration_secrets sp_client_secret --profile <source-profile>
+cd source
+databricks bundle deploy --profile YOUR_SOURCE_PROFILE
+databricks bundle run src_dashboard_inventory --profile YOUR_SOURCE_PROFILE
 ```
 
-See [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) for the full guide.
-
-### 4. Deploy the bundle (one-time)
+Open **`Bundle_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace, review the list, and confirm approval per the notebook instructions.
 
 ```bash
-databricks bundle deploy -t <target> --profile <source-profile>
+databricks bundle run src_dashboard_export_transform --profile YOUR_SOURCE_PROFILE
 ```
 
-### 5. (Optional) Verify secrets
-
-Open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in the workspace and run the config and verify cells.
-
----
-
-## Running the Migration (Steps 1–4)
-
-### Step 1: Generate inventory
+### 4. Deploy and run (target)
 
 ```bash
-databricks bundle run inventory_generation -t <target> --profile <source-profile>
+cd ../target
+databricks bundle deploy --profile YOUR_TARGET_PROFILE
+databricks bundle run tgt_dashboard_register --profile YOUR_TARGET_PROFILE
 ```
 
-### Step 2: Manual review and approval (UI)
-
-Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the Databricks workspace. Review dashboards, apply filters, type **CONFIRM** to save the approved inventory.
-
-### Step 3: Export and transform
-
-```bash
-databricks bundle run export_transform -t <target> --profile <source-profile>
-```
-
-### Step 4a: Generate bundles
-
-```bash
-# Dry run (preview only)
-databricks bundle run generate_deploy -t <target> --profile <source-profile>
-
-# Live (writes bundle + CSVs to volume)
-databricks bundle run generate_deploy -t <target> --profile <source-profile> \
-  --var="dry_run_mode=false"
-```
-
-### Step 4b: Deploy to target and apply metadata
-
-```bash
-./scripts/deploy_asset_bundle.sh \
-  --source-profile <source-profile> \
-  --target-profile <target-profile> \
-  --volume-base /Volumes/<catalog>/<schema>/dashboard_migration
-```
-
-This downloads the bundle from the volume, deploys dashboards to the target, then runs `apply_metadata.sh` to apply permissions, schedules, and subscriptions. No extra parameters are needed for normal use.
+The target job runs **transfer** (copy export volume content into the import volume) then **deploy** (create dashboards and apply permissions/schedules when enabled).
 
 ---
 
-## Verification Checklist
+## Jobs reference
 
-After setup or config changes:
+| Bundle | Job name | What it does |
+|--------|-----------|----------------|
+| Source | `src_dashboard_inventory` | Step 1 – builds inventory under your volume. |
+| Source | `src_dashboard_export_transform` | Step 3 – export and transform (after Step 2 approval). |
+| Target | `tgt_dashboard_register` | Transfer + deploy in the target workspace. |
 
-1. **Validate bundle:** `databricks bundle validate -t <target>`
-2. **Deploy:** `databricks bundle deploy -t <target> --profile <source-profile>`
-3. **Run jobs:** inventory_generation, export_transform, generate_deploy — confirm no `ModuleNotFoundError`
-4. **Bundle_02 in UI:** Run path cell and cells that import helpers
-5. **Setup_Migration_Secrets.ipynb:** Run config, path, verify, and test connection (if using SP OAuth)
-
----
-
-## Key Design Decisions
-
-- **Structure:** All code under `src/`; DAB resources in `resources/`; config and targets in root `databricks.yml`
-- **Single source of truth:** All configuration and target overrides in `databricks.yml`
-- **No secrets in repo:** Workspace URLs, catalogs, and credentials stay local or in Databricks secret scopes
-- **`include:` pattern:** Root `databricks.yml` includes `resources/*.yml` for separation of config vs job definitions
-- **Metadata by default:** Step 4b applies permissions, schedules, and subscriptions automatically and idempotently
+Step 2 is **manual** in **`Bundle_02_Review_and_Approve_Inventory.ipynb`** (no scheduled job).
 
 ---
 
-## Git Guidelines
+## Repository layout
 
-- Do **not** commit real workspace URLs, catalog names, warehouse IDs, or secrets.
-- The committed `databricks.yml` uses placeholders; override locally only.
-- Keep `auth_method`, `sp_secret_scope`, and generic names in the repo (e.g. `migration_secrets`).
-- Store `sp_client_id` and `sp_client_secret` via CLI only, never in code.
-
----
-
-## New User Flow
-
-1. **Clone** the repo.
-2. **Create** a Service Principal in Account Console; add to both workspaces; generate an OAuth secret.
-3. **Configure** `databricks.yml` locally (catalog, volume_base, source/target URLs, warehouse, auth_method).
-4. **Store** SP credentials via CLI (`create-scope`, `put-secret sp_client_id`, `put-secret sp_client_secret`).
-5. **Deploy** once: `databricks bundle deploy -t <target> --profile <source-profile>`.
-6. **Run** Steps 1–4 in order; use Step 4b to deploy to target and apply all metadata.
+| Path | Purpose |
+|------|---------|
+| `source/` | Source bundle: `databricks.yml`, `resources/src_dashboard_jobs.yml` |
+| `target/` | Target bundle: `databricks.yml`, `resources/tgt_dashboard_jobs.yml` |
+| `src/notebooks/` | Migration notebooks (shared by both bundles after deploy) |
+| `src/helpers/` | Python helpers |
+| `src/setup-guides/` | SP OAuth doc and secrets verification notebook |
+| `docs/` | Run-as-SP guide, optional single-workspace test notes |
+| `REQUIREMENTS.md` | Design assumptions (two bundles, same metastore) |
+| `SETUP.md` | Detailed setup and troubleshooting |
 
 ---
 
-## Troubleshooting
+## FAQ
 
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `ModuleNotFoundError: No module named 'helpers'` | `sys.path` missing `src/` | Run the path-resolution cell at the top of the notebook |
-| `Missing secrets: ['sp_client_id', 'sp_client_secret']` | Secrets not in scope | Run `databricks secrets put-secret` for both keys |
-| `Secret scope does not exist` | Scope not created | `databricks secrets create-scope migration_secrets --profile <source-profile>` |
-| `401 Unauthorized` on target | SP OAuth secret invalid or expired | Regenerate in Account Console; re-store via CLI |
-| `403 Forbidden` on target | SP lacks workspace permissions | Add SP to target workspace in Account Console |
-| `apply_metadata.sh not found` | Script missing (e.g. on old branch) | Use branch `main` or `exemplar-cleanup`; Step 4b still deploys dashboards but skips metadata |
-| Wrong workspace | Incorrect URL in yml | Verify `target_workspace_url` and `workspace.host` |
+**Why two bundles instead of one?**  
+Source and target are **different workspaces**. Each bundle sets `workspace.host` for where notebooks run. That keeps auth simple: OAuth in each workspace, no embedded cross-workspace tokens in the default transfer/deploy path.
+
+**Why must source and target share a metastore?**  
+The **transfer** step copies files between UC volume locations. Both catalogs must be visible to the **target** workspace’s compute for that copy to succeed. If your metastores differ, use **Delta Sharing**, **volume replication**, or another approved copy path—then adjust your process (not covered in the default notebooks).
+
+**Where do files live?**  
+Under the **export** volume path you set in the source bundle (subfolders such as `dashboard_inventory`, `exported`, `transformed`, etc.), then under the **import** volume after transfer.
+
+**What is Step 2 for?**  
+You narrow the dashboard list and **approve** what should be exported so large workspaces are not migrated by accident.
+
+**Do I need a mapping CSV?**  
+Only if **`transformation_enabled`** is `true` and you rely on catalog/schema/table rewrites. If transformation is off, you do not need the mapping file for that path (confirm your parameter defaults in the source bundle).
+
+**Which profile do I use where?**  
+Always use **`YOUR_SOURCE_PROFILE`** when running `databricks bundle` from **`source/`**, and **`YOUR_TARGET_PROFILE`** from **`target/`**, so the CLI talks to the correct host.
+
+**Does the SP replace my user for everything?**  
+No. You still deploy bundles and can run jobs as yourself. If you set **run as** on the target job to the SP, **only that job’s** notebook execution uses the SP for `WorkspaceClient()` and volume access **as configured**.
+
+**What does the SP need on the target warehouse?**  
+Ability to **run queries** on the warehouse you pass as `warehouse_id` / `warehouse_name` (e.g. “Can use” on the warehouse).
+
+**Can I migrate without an SP?**  
+Yes. Use your user identity for jobs and ensure **you** have UC and workspace permissions. SP is recommended for **automation and auditing**.
+
+**What if transfer says there is no source data?**  
+Confirm Step 3 finished successfully and paths match: **export volume** name in the source bundle equals the **`export_volume`** parameter expected by the target job’s transfer task (and catalogs/schemas are correct).
+
+**What if dashboards show broken data?**  
+Tables in the **target** catalog must exist and match **transformed** names. Validate mapping rules and run a few dashboards manually before a full cutover.
+
+**Are schedules and permissions always applied?**  
+They run when **`apply_permissions`** and **`apply_schedules`** are true in the target bundle and the SP or user has sufficient rights. Failures there may still leave dashboards created—check job logs.
+
+**Is this idempotent?**  
+Re-running may recreate or update objects depending on notebook logic and duplicate checks (`skip_duplicate_check`). Treat the first successful run as your template; read logs before repeating on production.
+
+**Where do I get Lakeview / bundle help?**  
+Use [Databricks documentation for Lakeview dashboards](https://docs.databricks.com/dashboards/index.html) and [Databricks Asset Bundles](https://docs.databricks.com/dev-tools/bundles/index.html).
+
+**What about `Bundle_04` notebooks in `src/notebooks/`?**  
+Some repos include an **optional** generate/deploy or asset-bundle path for advanced scenarios. The **default** DAB workflow for this tree is **source jobs + target `tgt_dashboard_register`**. If your fork adds a `generate_deploy` job or shell wrappers, follow that fork’s README.
+
+**Can I test from one machine without committing secrets?**  
+Yes. Use **`databricks.local.yml`** (gitignored) under `source/` and `target/` and keep tokens out of git. See examples in each folder’s `*.example` file.
 
 ---
 
-## Resources
+## More documentation
 
-| Resource | Description |
-|----------|-------------|
-| [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist before migration |
-| [SETUP.md](SETUP.md) | Full setup, SP OAuth, deploy, run, troubleshoot |
-| [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | Why this toolkit vs Terraform (comparison, decision guide, Mermaid diagrams) |
-| [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) | Detailed SP OAuth guide |
-| [src/setup-guides/Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) | Verify secrets and test connection |
-| [scripts/](scripts/) | `apply_metadata.sh`, `deploy_asset_bundle.sh`, IP ACL scripts |
-| [ip-detection/](ip-detection/) | Sub-bundle for cluster IP detection (IP ACL whitelisting) |
+| Document | Use |
+|----------|-----|
+| [SETUP.md](SETUP.md) | Full setup, secrets, troubleshooting |
+| [REQUIREMENTS.md](REQUIREMENTS.md) | Architecture and assumptions |
+| [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist |
+| [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | vs Terraform and decision guide |
+| [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |
+| [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) | UC grants and `run_as` for the target job |
+
+---
+
+## Support and customization
+
+Fork or clone [github.com/archana-krishnamurthy_data/dashboard-migration](https://github.com/archana-krishnamurthy_data/dashboard-migration) and keep **environment-specific values** in local files or CI variables. Do not commit production URLs, catalog names, or secrets.

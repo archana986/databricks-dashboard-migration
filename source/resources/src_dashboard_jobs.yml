@@ -1,0 +1,50 @@
+# Source workflow: inventory + export & transform. No target workspace calls.
+# Step 2 (review/approve) is manual in UI via Bundle_02.
+
+resources:
+  jobs:
+    src_dashboard_inventory:
+      name: "[Migration] Step 1 - Inventory Generation"
+      description: "Generate dashboard inventory. Then run Step 2 (review) in UI, then src_dashboard_export_transform."
+      tags:
+        project: "dashboard-migration"
+        step: "1-inventory"
+        workflow: "lakeview-migration"
+      tasks:
+        - task_key: generate_inventory
+          notebook_task:
+            notebook_path: ../src/notebooks/Bundle_01_Inventory_Generation.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              volume_base: ${var.volume_base}
+              source_workspace_url: ${var.source_workspace_url}
+              inventory_path: ${var.inventory_path}
+              audit_lookback_days: ${var.audit_lookback_days}
+
+    src_dashboard_export_transform:
+      name: "[Migration] Step 3 - Export & Transform"
+      description: "Export and transform dashboards. Requires Step 2 (manual review) completed first."
+      tags:
+        project: "dashboard-migration"
+        step: "3-export-transform"
+        workflow: "lakeview-migration"
+      tasks:
+        - task_key: export_and_transform
+          notebook_task:
+            notebook_path: ../src/notebooks/Bundle_03_Export_and_Transform.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              volume_base: ${var.volume_base}
+              source_workspace_url: ${var.source_workspace_url}
+              target_workspace_url: ""
+              inventory_path: ${var.inventory_approved_path}
+              exported_path: ${var.exported_path}
+              transformed_path: ${var.transformed_path}
+              mappings_path: ${var.mappings_path}
+              transformation_enabled: ${var.transformation_enabled}
+              mapping_csv_path: ${var.mapping_csv_path}
+              capture_permissions: ${var.capture_permissions}
+              capture_schedules: ${var.capture_schedules}
+              archive_old_files: ${var.archive_old_files}
+              archive_min_age_minutes: ${var.archive_min_age_minutes}
+              force_archive_all: ${var.force_archive_all}

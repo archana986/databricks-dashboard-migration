@@ -1,0 +1,20 @@
+# Copy to databricks.local.yml (gitignored) for local testing.
+#
+#   cp databricks.local.yml.example databricks.local.yml
+#
+# Replace placeholders: target workspace host, target profile, catalogs, volume names, warehouse, parent path.
+
+targets:
+  default:
+    workspace:
+      host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+      profile: YOUR_TARGET_PROFILE
+    variables:
+      source_catalog: YOUR_SOURCE_CATALOG
+      target_catalog: YOUR_TARGET_CATALOG
+      schema: YOUR_SCHEMA
+      export_volume: YOUR_EXPORT_VOLUME_NAME
+      import_volume: YOUR_IMPORT_VOLUME_NAME
+      volume_base: /Volumes/YOUR_TARGET_CATALOG/YOUR_SCHEMA/YOUR_IMPORT_VOLUME_NAME
+      warehouse_id: "<YOUR_SQL_WAREHOUSE_ID>"
+      target_parent_path: /Shared/Migrated_Dashboards

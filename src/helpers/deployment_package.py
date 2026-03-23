@@ -79,7 +79,7 @@ class DashboardDeploymentPackage:
                     'timezone_id': s.timezone_id,
                     'pause_status': s.pause_status,
                     'subscriptions': [
-                        {'destination_type': sub.destination_type, 'destination_id': sub.destination_id, 'subject': sub.subject}
+                        {'user_id': sub.user_id, 'destination_id': sub.destination_id, 'subject': sub.subject}
                         for sub in s.subscriptions
                     ]
                 }
