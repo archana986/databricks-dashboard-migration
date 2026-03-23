@@ -5,12 +5,12 @@
 resources:
   jobs:
     tgt_dashboard_register:
-      name: "[Migration] Target - Transfer & Deploy"
-      description: "Transfer export volume to import volume, then deploy dashboards in this workspace."
+      name: "[Tgt] Dashboard Transfer & Deploy"
+      description: "Copy artifacts from source export volume to target import volume, then create dashboards with permissions and schedules."
       tags:
         project: "dashboard-migration"
         workflow: "lakeview-migration"
-        step: "tgt-deploy"
+        step: "transfer-deploy"
       tasks:
         - task_key: transfer
           notebook_task:
@@ -18,7 +18,8 @@ resources:
             base_parameters:
               source_catalog: ${var.source_catalog}
               target_catalog: ${var.target_catalog}
-              schema: ${var.schema}
+              source_schema: ${var.source_schema}
+              target_schema: ${var.target_schema}
               export_volume: ${var.export_volume}
               import_volume: ${var.import_volume}
 

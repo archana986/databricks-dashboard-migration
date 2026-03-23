@@ -77,18 +77,38 @@ sequenceDiagram
 
 ## Quick start (two workspaces)
 
-**Prerequisites (short):** Databricks CLI, **two profiles** (`YOUR_SOURCE_PROFILE`, `YOUR_TARGET_PROFILE`), admin or sufficient rights on both workspaces, **same UC metastore** for source and target catalogs, volumes created, target **SQL warehouse**, and target **tables** that match transformed references. See [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md).
+**Prerequisites (short):**
+
+1. Databricks CLI v0.218+ with **two profiles** (source and target)
+2. Source and target catalogs on the **same UC metastore**
+3. Target **SQL warehouse** and target **tables** matching transformed references
+4. Admin or sufficient rights on both workspaces
+
+**Volumes and files to create:**
+
+| What | When to create | How |
+|------|----------------|-----|
+| **Export volume** (source catalog) | Before running the Inventory job | `CREATE VOLUME IF NOT EXISTS <source_catalog>.<source_schema>.<export_volume>;` in the **source** workspace |
+| **Import volume** (target catalog) | **Automatic** — the Transfer & Deploy job creates it | No action needed; the Transfer notebook runs `CREATE VOLUME IF NOT EXISTS` |
+| **Mapping CSV** | Before running Export & Transform, if `transformation_enabled` is `"true"` | Create from the template (`catalog_schema_mapping_template.csv`), then upload: `databricks fs cp catalog_schema_mapping.csv dbfs:/Volumes/<source_catalog>/<source_schema>/<export_volume>/mappings/catalog_schema_mapping.csv --profile <source-profile>` |
+
+See [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) for the full checklist with SQL and CLI commands.
 
 ### 1. Clone and configure locally
 
 ```bash
-git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
+git clone https://github.com/YOUR_ORG/dashboard-migration.git
 cd dashboard-migration
 ```
 
-Edit **`source/databricks.yml`** for the **source** workspace host, catalog, and **export** volume path. Edit **`target/databricks.yml`** for the **target** workspace host, source/target catalog names for the transfer step, **import** volume path, **warehouse**, and **target_parent_path**. Do not commit real URLs or secrets.
+Copy the local override examples and fill in your values:
 
-**Optional:** Copy `source/databricks.local.yml.example` → `source/databricks.local.yml` and `target/databricks.local.yml.example` → `target/databricks.local.yml` (see `.gitignore`) so your machine keeps overrides for testing.
+```bash
+cp source/databricks.local.yml.example source/databricks.local.yml
+cp target/databricks.local.yml.example target/databricks.local.yml
+```
+
+Edit each `databricks.local.yml` with your workspace host, profile, catalogs, schemas, volume names, warehouse ID, and target folder path. These files are gitignored — your environment-specific values stay local. See [SETUP.md](SETUP.md) for the full variable reference.
 
 ### 2. Service principal in both workspaces (recommended)
 
@@ -107,7 +127,7 @@ databricks bundle deploy --profile YOUR_SOURCE_PROFILE
 databricks bundle run src_dashboard_inventory --profile YOUR_SOURCE_PROFILE
 ```
 
-Open **`Bundle_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace, review the list, and confirm approval per the notebook instructions.
+Open **`Bundle_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as `inventory_approved.csv` under `dashboard_inventory_approved/` in your export volume. The Export & Transform job reads this exact file.
 
 ```bash
 databricks bundle run src_dashboard_export_transform --profile YOUR_SOURCE_PROFILE
@@ -115,25 +135,36 @@ databricks bundle run src_dashboard_export_transform --profile YOUR_SOURCE_PROFI
 
 ### 4. Deploy and run (target)
 
+The target bundle deploys to a **separate workspace**. Before deploying, ensure the following are in place on the **target** workspace:
+
+| Requirement | Details |
+|-------------|---------|
+| **CLI profile** | A separate profile in `~/.databrickscfg` pointing to the target workspace host |
+| **Target catalog + schema** | Must exist and be accessible; must be on the **same UC metastore** as the source catalog |
+| **Target tables** | Tables referenced by transformed dashboards must already exist in the target catalog |
+| **SQL warehouse** | A warehouse the deploying user (or SP) can use; its ID goes in `warehouse_id` |
+| **Target folder** | A workspace folder (e.g. `/Shared/Migrated_Dashboards`) where dashboards will be created; the user or SP must have `CAN_MANAGE` on it |
+| **UC permissions** | The deploying user or SP needs `USE CATALOG`, `USE SCHEMA` on the target catalog/schema, and `READ VOLUME`/`WRITE VOLUME` on the import volume (if pre-created) |
+
 ```bash
 cd ../target
 databricks bundle deploy --profile YOUR_TARGET_PROFILE
 databricks bundle run tgt_dashboard_register --profile YOUR_TARGET_PROFILE
 ```
 
-The target job runs **transfer** (copy export volume content into the import volume) then **deploy** (create dashboards and apply permissions/schedules when enabled).
+The target job runs **transfer** (copy artifacts from the source export volume into the target import volume — both visible via the shared metastore) then **deploy** (create dashboards under `target_parent_path` and apply permissions/schedules when enabled).
 
 ---
 
 ## Jobs reference
 
-| Bundle | Job name | What it does |
-|--------|-----------|----------------|
-| Source | `src_dashboard_inventory` | Step 1 – builds inventory under your volume. |
-| Source | `src_dashboard_export_transform` | Step 3 – export and transform (after Step 2 approval). |
-| Target | `tgt_dashboard_register` | Transfer + deploy in the target workspace. |
+| Bundle | Job name | CLI key | What it does |
+|--------|----------|---------|--------------|
+| Source | `[Src] Dashboard Inventory` | `src_dashboard_inventory` | Scans source dashboards and generates inventory CSV |
+| Source | `[Src] Dashboard Export & Transform` | `src_dashboard_export_transform` | Exports and transforms approved dashboards |
+| Target | `[Tgt] Dashboard Transfer & Deploy` | `tgt_dashboard_register` | Copies volume data and creates dashboards in target |
 
-Step 2 is **manual** in **`Bundle_02_Review_and_Approve_Inventory.ipynb`** (no scheduled job).
+Between **Inventory** and **Export & Transform**, review and approve in **`Bundle_02_Review_and_Approve_Inventory.ipynb`** (manual, no scheduled job).
 
 ---
 
@@ -143,12 +174,25 @@ Step 2 is **manual** in **`Bundle_02_Review_and_Approve_Inventory.ipynb`** (no s
 |------|---------|
 | `source/` | Source bundle: `databricks.yml`, `resources/src_dashboard_jobs.yml` |
 | `target/` | Target bundle: `databricks.yml`, `resources/tgt_dashboard_jobs.yml` |
-| `src/notebooks/` | Migration notebooks (shared by both bundles after deploy) |
+| `src/notebooks/` | Migration notebooks (shared by both bundles) |
 | `src/helpers/` | Python helpers |
 | `src/setup-guides/` | SP OAuth doc and secrets verification notebook |
 | `docs/` | Run-as-SP guide, optional single-workspace test notes |
 | `REQUIREMENTS.md` | Design assumptions (two bundles, same metastore) |
 | `SETUP.md` | Detailed setup and troubleshooting |
+
+**Symlink requirement:** Each bundle directory (`source/`, `target/`) contains a symlink `src` -> `../src` so that job notebook paths resolve correctly. After cloning, verify these exist:
+
+```bash
+ls -la source/src target/src
+# Both should point to ../src
+```
+
+If missing (e.g. on Windows or after a shallow export), recreate them:
+
+```bash
+cd source && ln -sfn ../src src && cd ../target && ln -sfn ../src src
+```
 
 ---
 
@@ -219,4 +263,4 @@ Yes. Use **`databricks.local.yml`** (gitignored) under `source/` and `target/` a
 
 ## Support and customization
 
-Fork or clone [github.com/archana-krishnamurthy_data/dashboard-migration](https://github.com/archana-krishnamurthy_data/dashboard-migration) and keep **environment-specific values** in local files or CI variables. Do not commit production URLs, catalog names, or secrets.
+Fork or clone this repository and keep **environment-specific values** in local files or CI variables. Do not commit production URLs, catalog names, or secrets.

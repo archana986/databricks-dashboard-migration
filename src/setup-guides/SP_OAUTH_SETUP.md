@@ -228,30 +228,21 @@ print_setup_instructions("migration_secrets")
 
 ---
 
-## Phase 5: Deploy with SP Authentication
+## Phase 5: Run Migration with SP Authentication
 
-### Dry Run (Preview - Default)
-
-```bash
-databricks bundle run generate_deploy -t dev --profile source-workspace
-```
-
-### Live Deployment
+After deploying both bundles, run the migration jobs. The notebooks automatically use SP OAuth M2M authentication when `auth_method: "sp_oauth"` is configured.
 
 ```bash
-databricks bundle run generate_deploy -t dev --var="dry_run_mode=false" --profile source-workspace
+# Source workspace: inventory, then export/transform
+cd source
+databricks bundle run src_dashboard_inventory --profile <source-profile>
+# (Step 2: manual review in UI)
+databricks bundle run src_dashboard_export_transform --profile <source-profile>
+
+# Target workspace: transfer and deploy
+cd ../target
+databricks bundle run tgt_dashboard_register --profile <target-profile>
 ```
-
-### With Asset Bundle Method
-
-```bash
-databricks bundle run generate_deploy -t dev \
-  --var="deployment_method=asset_bundle" \
-  --var="dry_run_mode=false" \
-  --profile source-workspace
-```
-
-The notebook will automatically use SP OAuth M2M authentication when `auth_method: "sp_oauth"` is set.
 
 ---
 
@@ -304,11 +295,8 @@ databricks secrets put-secret migration_secrets sp_client_id --profile source-wo
 **Cause**: Target workspace has IP Access Lists enabled, blocking your cluster IP.
 
 **Fix** (choose one):
-1. Whitelist your cluster IP using the automated script:
-   ```bash
-   ./scripts/auto_setup_ip_acl.sh
-   ```
-2. Or manually add your cluster's egress IP to target workspace's IP Access Lists
+1. Manually add your cluster's egress IP to the target workspace's IP Access Lists
+2. Or use the IP ACL setup notebook at `src/notebooks/Bundle_IP_ACL_Setup.ipynb` if available
 
 ### Error: "Connected to wrong workspace"
 
@@ -396,4 +384,4 @@ variables:
 ## Related Documentation
 
 - [README.md](../../README.md) - Main project documentation
-- [ip-detection/README.md](../../ip-detection/README.md) - IP detection and whitelisting
+- [docs/TARGET_JOB_RUN_AS_SP.md](../../docs/TARGET_JOB_RUN_AS_SP.md) - UC grants and run-as configuration

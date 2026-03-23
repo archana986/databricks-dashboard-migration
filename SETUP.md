@@ -13,27 +13,32 @@ How to set up and use this Databricks Dashboard Migration toolkit for your own p
 | **Databricks CLI** | v0.218.0+ ([install guide](https://docs.databricks.com/dev-tools/cli/install.html)) |
 | **CLI profiles** | Two profiles in `~/.databrickscfg` -- one for source workspace, one for target |
 | **Workspace access** | Admin or sufficient permissions on both source and target workspaces |
-| **Unity Catalog volume** | A volume for migration artifacts (e.g. `/Volumes/<catalog>/<schema>/dashboard_migration`) |
+| **Same UC metastore** | Source and target catalogs must be on the same Unity Catalog metastore |
+| **Export volume** | A UC volume in the **source** catalog for export artifacts |
+| **Import volume** | A UC volume in the **target** catalog for import artifacts |
 | **SQL warehouse** | A warehouse in the target workspace (ID or name) |
-| **Service Principal** (recommended) | For Step 4 cross-workspace deployment via SP OAuth |
+| **Mapping CSV** | Required if `transformation_enabled` is `"true"` (see Step 2b below) |
+| **Service Principal** (recommended) | For cross-workspace deployment via SP OAuth |
 
 ---
 
 ## Step 1: Clone the Repository
 
 ```bash
-git clone https://github.com/archana-krishnamurthy_data/dashboard-migration.git
+git clone https://github.com/YOUR_ORG/dashboard-migration.git
 cd dashboard-migration
 ```
 
-After cloning, verify the structure:
+After cloning, verify the structure and symlinks:
 
 ```
 dashboard-migration/
   source/databricks.yml       # Source bundle (edit for source workspace)
   source/resources/           # Source job definitions
+  source/src -> ../src        # Symlink to shared code (required)
   target/databricks.yml       # Target bundle (edit for target workspace)
   target/resources/           # Target job definitions (transfer + deploy)
+  target/src -> ../src        # Symlink to shared code (required)
   src/notebooks/              # Migration notebooks (Steps 1-4, transfer, deploy)
   src/helpers/                # Python modules
   src/setup-guides/           # SP OAuth docs + secrets notebook
@@ -42,11 +47,58 @@ dashboard-migration/
   README.md                   # Project overview
 ```
 
+**Verify symlinks exist** (required for bundle deploy):
+
+```bash
+ls -la source/src target/src
+# Both should be symlinks to ../src
+# If missing, recreate: cd source && ln -sfn ../src src && cd ../target && ln -sfn ../src src
+```
+
+---
+
+## Step 1b: Create Unity Catalog volumes and mapping CSV
+
+### Export volume (required — create before running Inventory)
+
+Run in the **source** workspace (SQL editor or notebook):
+
+```sql
+CREATE VOLUME IF NOT EXISTS <source_catalog>.<source_schema>.<export_volume>;
+-- Example: CREATE VOLUME IF NOT EXISTS my_catalog.migration.dashboard_export;
+```
+
+All migration artifacts (inventory, exported JSONs, transformed JSONs, mapping CSV) are written here.
+
+### Import volume (automatic — no action needed)
+
+The **Transfer & Deploy** job creates this volume automatically via `CREATE VOLUME IF NOT EXISTS`. You do **not** need to create it manually. If you prefer to pre-create it:
+
+```sql
+-- Optional — run in the target workspace
+CREATE VOLUME IF NOT EXISTS <target_catalog>.<target_schema>.<import_volume>;
+-- Example: CREATE VOLUME IF NOT EXISTS my_target_catalog.migration_tgt.dashboard_import;
+```
+
+### Mapping CSV (required if `transformation_enabled` is `"true"`)
+
+Create a CSV from the template (`catalog_schema_mapping_template.csv` in the repo root) and upload it to the export volume **before** running Export & Transform:
+
+```bash
+databricks fs cp catalog_schema_mapping.csv \
+  dbfs:/Volumes/<source_catalog>/<source_schema>/<export_volume>/mappings/catalog_schema_mapping.csv \
+  --profile <source-profile>
+```
+
+See Step 2b below for column reference and examples.
+
+Both catalogs must be on the **same Unity Catalog metastore** for the transfer step to work.
+
 ---
 
 ## Step 2: Configure `databricks.yml`
 
-Open `databricks.yml` and update the target you plan to use (e.g. `dev` or `azure-test`).
+Copy the local override examples and fill in your values (recommended), or edit `databricks.yml` directly (not recommended for shared repos).
 
 ### Local overrides (recommended)
 
@@ -75,23 +127,48 @@ Add the same **service principal** to **both** workspaces for automation; grant 
 | `workspace.host` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
 | `source_catalog` | Catalog that holds the **export** volume | `source_catalog` |
 | `target_catalog` | Catalog that holds the **import** volume | `target_catalog` |
-| `schema` | Schema containing both volumes | `default` |
-| `export_volume` / `import_volume` | Volume **names** (transfer task) | e.g. `dashboard_migration` or distinct export/import names |
-| `volume_base` | Full import volume path | `/Volumes/<target_catalog>/<schema>/<import_volume>` |
+| `source_schema` | Schema in source catalog (export volume) | `default` |
+| `target_schema` | Schema in target catalog (import volume) | `default` |
+| `export_volume` | Export volume **name** in source catalog | `dashboard_migration` |
+| `import_volume` | Import volume **name** in target catalog | `dashboard_migration` |
+| `volume_base` | Full import volume path | `/Volumes/<target_catalog>/<target_schema>/<import_volume>` |
 | `target_parent_path` | Workspace folder for new dashboards | `/Shared/Migrated_Dashboards` |
 | `warehouse_id` or `warehouse_name` | Target SQL warehouse | ID or display name |
 
-### Example: source `targets.default` snippet
+### Example: local override files
+
+**`source/databricks.local.yml`** (copy from `source/databricks.local.yml.example`):
 
 ```yaml
 targets:
   default:
     workspace:
       host: https://adb-123456.1.azuredatabricks.net
+      profile: my-source-profile
     variables:
       source_workspace_url: https://adb-123456.1.azuredatabricks.net
       catalog: my_catalog
       volume_base: /Volumes/my_catalog/my_schema/dashboard_migration_export
+```
+
+**`target/databricks.local.yml`** (copy from `target/databricks.local.yml.example`):
+
+```yaml
+targets:
+  default:
+    workspace:
+      host: https://adb-789012.10.azuredatabricks.net
+      profile: my-target-profile
+    variables:
+      source_catalog: my_source_catalog
+      target_catalog: my_target_catalog
+      source_schema: my_source_schema
+      target_schema: my_target_schema
+      export_volume: dashboard_export
+      import_volume: dashboard_import
+      volume_base: /Volumes/my_target_catalog/my_target_schema/dashboard_import
+      warehouse_id: "abc123def456"
+      target_parent_path: /Shared/Migrated_Dashboards
 ```
 
 > **Important:** Do NOT commit your real URLs, catalog names, or warehouse IDs. Keep these changes local only.
@@ -156,7 +233,7 @@ databricks bundle validate
 databricks bundle deploy --profile <source-profile>
 ```
 
-This syncs notebooks and helpers into the **source** workspace and registers **two** jobs: `src_dashboard_inventory` and `src_dashboard_export_transform`.
+This syncs notebooks and helpers into the **source** workspace and registers **two** jobs: `[Src] Dashboard Inventory` and `[Src] Dashboard Export & Transform`.
 
 ---
 
@@ -172,7 +249,56 @@ databricks bundle run src_dashboard_inventory --profile <source-profile>
 ```
 
 **Step 2 — Review and approve (UI)**  
-Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the **source** workspace. Review dashboards, apply filters, type **CONFIRM** to save the approved inventory.
+Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as:
+
+```
+<volume_base>/dashboard_inventory_approved/inventory_approved.csv
+```
+
+The Export & Transform job reads this exact file. Do not rename it.
+
+**Step 2b — Upload mapping CSV** (required if `transformation_enabled` is `"true"`)
+
+Create a mapping CSV from the template (`catalog_schema_mapping_template.csv` in the repo root) with your old and new catalog/schema names. Upload it to the export volume:
+
+```bash
+databricks fs cp catalog_schema_mapping.csv \
+  dbfs:/Volumes/<source_catalog>/<source_schema>/<export_volume>/mappings/catalog_schema_mapping.csv \
+  --profile <source-profile>
+```
+
+A template is included in the repo root: `catalog_schema_mapping_template.csv`.
+
+**Column reference:**
+
+| Column | Required | Description |
+|--------|----------|-------------|
+| `old_catalog` | Yes | Source catalog name to find in dashboard SQL |
+| `old_schema` | Yes | Source schema name to find |
+| `old_table` | No | Specific table name (leave empty to match all tables in the schema) |
+| `new_catalog` | Yes | Target catalog name to replace with |
+| `new_schema` | Yes | Target schema name to replace with |
+| `new_table` | No | New table name (leave empty to keep original table name) |
+| `old_volume` | No | Source volume name to replace (if dashboard SQL references volumes) |
+| `new_volume` | No | Target volume name to replace with |
+
+**Example 1 — Remap all tables from one catalog/schema to another:**
+
+```csv
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+my_source_catalog,my_schema,,my_target_catalog,my_target_schema,,,
+```
+
+**Example 2 — Multiple schemas with specific table renames:**
+
+```csv
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+dev_catalog,bronze_layer,,prod_catalog,gold_layer,,,
+staging_cat,raw_data,events,prod_catalog,curated_data,events,,
+staging_cat,raw_data,clicks,prod_catalog,analytics,click_events,,
+```
+
+If you do **not** need catalog/schema rewriting in dashboard SQL, set `transformation_enabled: "false"` in your local config and skip this step.
 
 **Step 3 — Export and transform**
 

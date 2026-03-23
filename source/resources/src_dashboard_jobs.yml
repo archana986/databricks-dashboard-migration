@@ -4,11 +4,11 @@
 resources:
   jobs:
     src_dashboard_inventory:
-      name: "[Migration] Step 1 - Inventory Generation"
-      description: "Generate dashboard inventory. Then run Step 2 (review) in UI, then src_dashboard_export_transform."
+      name: "[Src] Dashboard Inventory"
+      description: "Scan source workspace dashboards and generate an inventory CSV. Review and approve in Bundle_02 before running Export & Transform."
       tags:
         project: "dashboard-migration"
-        step: "1-inventory"
+        step: "inventory"
         workflow: "lakeview-migration"
       tasks:
         - task_key: generate_inventory
@@ -22,11 +22,11 @@ resources:
               audit_lookback_days: ${var.audit_lookback_days}
 
     src_dashboard_export_transform:
-      name: "[Migration] Step 3 - Export & Transform"
-      description: "Export and transform dashboards. Requires Step 2 (manual review) completed first."
+      name: "[Src] Dashboard Export & Transform"
+      description: "Export approved dashboards and transform catalog/schema references. Requires inventory review (Bundle_02) completed first."
       tags:
         project: "dashboard-migration"
-        step: "3-export-transform"
+        step: "export-transform"
         workflow: "lakeview-migration"
       tasks:
         - task_key: export_and_transform

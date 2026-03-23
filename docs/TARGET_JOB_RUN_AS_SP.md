@@ -105,7 +105,7 @@ In **`target/resources/tgt_dashboard_jobs.yml`**, on the job `tgt_dashboard_regi
 resources:
   jobs:
     tgt_dashboard_register:
-      name: "[Migration] Target - Transfer & Deploy"
+      name: "[Tgt] Dashboard Transfer & Deploy"
       run_as:
         service_principal_name: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
       description: "Transfer export volume to import volume, then deploy dashboards in this workspace."

@@ -12,13 +12,14 @@ bundle:
 
 include:
   - resources/*.yml
+  - databricks.local.yml
 
 # Sync shared src from repo root (parent of source/)
 sync:
   paths:
-    - ../src/notebooks
-    - ../src/helpers
-    - ../src/setup-guides
+    - src/notebooks
+    - src/helpers
+    - src/setup-guides
 
 variables:
   source_workspace_url:

@@ -11,11 +11,12 @@ bundle:
 
 include:
   - resources/*.yml
+  - databricks.local.yml
 
 sync:
   paths:
-    - ../src/notebooks
-    - ../src/helpers
+    - src/notebooks
+    - src/helpers
 
 variables:
   source_catalog:
@@ -24,8 +25,11 @@ variables:
   target_catalog:
     description: Target catalog (holds import volume)
     default: YOUR_TARGET_CATALOG
-  schema:
-    description: Schema name
+  source_schema:
+    description: Schema in source catalog (holds export volume)
+    default: default
+  target_schema:
+    description: Schema in target catalog (holds import volume)
     default: default
   export_volume:
     description: Export volume name in source catalog
@@ -76,5 +80,6 @@ targets:
     variables:
       source_catalog: YOUR_SOURCE_CATALOG
       target_catalog: YOUR_TARGET_CATALOG
-      schema: default
+      source_schema: default
+      target_schema: default
       volume_base: /Volumes/YOUR_TARGET_CATALOG/default/dashboard_migration

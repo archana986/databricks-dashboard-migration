@@ -12,9 +12,10 @@ targets:
     variables:
       source_catalog: YOUR_SOURCE_CATALOG
       target_catalog: YOUR_TARGET_CATALOG
-      schema: YOUR_SCHEMA
+      source_schema: YOUR_SOURCE_SCHEMA
+      target_schema: YOUR_TARGET_SCHEMA
       export_volume: YOUR_EXPORT_VOLUME_NAME
       import_volume: YOUR_IMPORT_VOLUME_NAME
-      volume_base: /Volumes/YOUR_TARGET_CATALOG/YOUR_SCHEMA/YOUR_IMPORT_VOLUME_NAME
+      volume_base: /Volumes/YOUR_TARGET_CATALOG/YOUR_TARGET_SCHEMA/YOUR_IMPORT_VOLUME_NAME
       warehouse_id: "<YOUR_SQL_WAREHOUSE_ID>"
       target_parent_path: /Shared/Migrated_Dashboards
