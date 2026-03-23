@@ -98,14 +98,7 @@ Both catalogs must be on the **same Unity Catalog metastore** for the transfer s
 
 ## Step 2: Configure `databricks.yml`
 
-Copy the local override examples and fill in your values (recommended), or edit `databricks.yml` directly (not recommended for shared repos).
-
-### Local overrides (recommended)
-
-To avoid committing workspace URLs and catalog names, copy the examples and edit the generated `databricks.local.yml` files (gitignored):
-
-- `source/databricks.local.yml.example` → `source/databricks.local.yml`
-- `target/databricks.local.yml.example` → `target/databricks.local.yml`
+Edit the `databricks.yml` file in each bundle folder directly. Each file has a clearly marked **EDIT HERE** section at the bottom where you replace placeholder values with your environment details.
 
 **Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore** (see [REQUIREMENTS.md](REQUIREMENTS.md)). Optional single-workspace test notes: [docs/SINGLE_WORKSPACE_OPTIONAL.md](docs/SINGLE_WORKSPACE_OPTIONAL.md).
 
@@ -113,65 +106,33 @@ Add the same **service principal** to **both** workspaces for automation; grant 
 
 ### Source bundle (`source/databricks.yml`)
 
+Open `source/databricks.yml` and edit the **EDIT HERE** section:
+
 | Variable | What to enter | Example |
 |---|---|---|
+| `workspace.profile` | CLI profile name (from `databricks auth login`) | `my-source-profile` |
 | `workspace.host` | Source workspace URL | `https://adb-123456.1.azuredatabricks.net` |
+| `source_workspace_url` | Same as host (used by job parameters) | `https://adb-123456.1.azuredatabricks.net` |
 | `catalog` | Source catalog name | `my_catalog` |
-| `volume_base` | UC **export** volume path for artifacts | `/Volumes/my_catalog/my_schema/dashboard_migration` |
-| `source_workspace_url` | Source workspace URL (display / parameters) | `https://adb-123456.1.azuredatabricks.net` |
+| `volume_base` | Export volume path: `/Volumes/<catalog>/<schema>/<volume>` | `/Volumes/my_catalog/my_schema/dashboard_export` |
 
 ### Target bundle (`target/databricks.yml`)
 
+Open `target/databricks.yml` and edit the **EDIT HERE** section:
+
 | Variable | What to enter | Example |
 |---|---|---|
+| `workspace.profile` | CLI profile name for target workspace | `my-target-profile` |
 | `workspace.host` | Target workspace URL | `https://adb-789012.10.azuredatabricks.net` |
 | `source_catalog` | Catalog that holds the **export** volume | `source_catalog` |
 | `target_catalog` | Catalog that holds the **import** volume | `target_catalog` |
 | `source_schema` | Schema in source catalog (export volume) | `default` |
 | `target_schema` | Schema in target catalog (import volume) | `default` |
-| `export_volume` | Export volume **name** in source catalog | `dashboard_migration` |
-| `import_volume` | Import volume **name** in target catalog | `dashboard_migration` |
-| `volume_base` | Full import volume path | `/Volumes/<target_catalog>/<target_schema>/<import_volume>` |
+| `export_volume` | Export volume **name** in source catalog | `dashboard_export` |
+| `import_volume` | Import volume **name** in target catalog | `dashboard_import` |
+| `volume_base` | Full import volume path: `/Volumes/<target_catalog>/<target_schema>/<import_volume>` | `/Volumes/target_catalog/default/dashboard_import` |
+| `warehouse_id` | SQL warehouse ID (find in SQL Warehouses > Connection details) | `"abc123def456"` |
 | `target_parent_path` | Workspace folder for new dashboards | `/Shared/Migrated_Dashboards` |
-| `warehouse_id` or `warehouse_name` | Target SQL warehouse | ID or display name |
-
-### Example: local override files
-
-**`source/databricks.local.yml`** (copy from `source/databricks.local.yml.example`):
-
-```yaml
-targets:
-  default:
-    workspace:
-      host: https://adb-123456.1.azuredatabricks.net
-      profile: my-source-profile
-    variables:
-      source_workspace_url: https://adb-123456.1.azuredatabricks.net
-      catalog: my_catalog
-      volume_base: /Volumes/my_catalog/my_schema/dashboard_migration_export
-```
-
-**`target/databricks.local.yml`** (copy from `target/databricks.local.yml.example`):
-
-```yaml
-targets:
-  default:
-    workspace:
-      host: https://adb-789012.10.azuredatabricks.net
-      profile: my-target-profile
-    variables:
-      source_catalog: my_source_catalog
-      target_catalog: my_target_catalog
-      source_schema: my_source_schema
-      target_schema: my_target_schema
-      export_volume: dashboard_export
-      import_volume: dashboard_import
-      volume_base: /Volumes/my_target_catalog/my_target_schema/dashboard_import
-      warehouse_id: "abc123def456"
-      target_parent_path: /Shared/Migrated_Dashboards
-```
-
-> **Important:** Do NOT commit your real URLs, catalog names, or warehouse IDs. Keep these changes local only.
 
 ---
 

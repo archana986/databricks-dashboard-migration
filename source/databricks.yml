@@ -1,18 +1,18 @@
-# Source bundle — deploy to source workspace.
-# Inventory + export & transform only. Writes to export volume. No target workspace calls.
+# Source bundle — deploy to the SOURCE workspace.
+# Scans dashboards, exports definitions, and transforms catalog/schema references.
 #
-# Deploy: cd source && databricks bundle deploy
-# Run:    databricks bundle run src_dashboard_inventory
-#         databricks bundle run src_dashboard_export_transform
-#
-# Auth: databricks auth login -p <source-profile> --host <source-workspace-url>
+# Setup:
+#   1. Run: databricks auth login -p <your-profile> --host <your-source-workspace-url>
+#   2. Edit the "targets > default" section below with your values
+#   3. Deploy: cd source && databricks bundle deploy
+#   4. Run:    databricks bundle run src_dashboard_inventory
+#              databricks bundle run src_dashboard_export_transform
 
 bundle:
   name: dashboard-migration-src
 
 include:
   - resources/*.yml
-  - databricks.local.yml
 
 # Sync shared src from repo root (parent of source/)
 sync:
@@ -21,6 +21,11 @@ sync:
     - src/helpers
     - src/setup-guides
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Variable definitions — defaults are placeholders.
+# Override them in the "targets > default > variables" section below.
+# Most customers only need to change: catalog, volume_base, source_workspace_url.
+# ──────────────────────────────────────────────────────────────────────────────
 variables:
   source_workspace_url:
     description: Source workspace URL (for display; jobs run here)
@@ -71,13 +76,22 @@ variables:
     description: Archive all files regardless of age (true/false)
     default: "false"
 
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  EDIT HERE — replace placeholder values with your environment details      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 targets:
   default:
     default: true
     workspace:
+      # CLI profile name from ~/.databrickscfg (created by: databricks auth login)
       profile: source-profile
+      # Source workspace URL (e.g. https://adb-123456.1.azuredatabricks.net)
       host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
     variables:
+      # Same as host above
       source_workspace_url: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      # Unity Catalog catalog name that contains your dashboards' tables
       catalog: YOUR_CATALOG
+      # Full volume path: /Volumes/<catalog>/<schema>/<volume_name>
+      # Create this volume first: CREATE VOLUME IF NOT EXISTS <catalog>.<schema>.<volume>;
       volume_base: /Volumes/YOUR_CATALOG/YOUR_SCHEMA/dashboard_migration

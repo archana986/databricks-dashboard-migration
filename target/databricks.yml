@@ -1,23 +1,28 @@
-# Target bundle — deploy to target workspace.
-# Transfer from source export volume, then deploy dashboards in this workspace (local WorkspaceClient, OAuth).
+# Target bundle — deploy to the TARGET workspace.
+# Transfers artifacts from the source export volume, then creates dashboards
+# with permissions and schedules in this workspace.
 #
-# Deploy: cd target && databricks bundle deploy
-# Run:    databricks bundle run tgt_dashboard_register
-#
-# Auth: databricks auth login -p <target-profile> --host <target-workspace-url>
+# Setup:
+#   1. Run: databricks auth login -p <your-profile> --host <your-target-workspace-url>
+#   2. Edit the "targets > default" section below with your values
+#   3. Deploy: cd target && databricks bundle deploy
+#   4. Run:    databricks bundle run tgt_dashboard_register
 
 bundle:
   name: dashboard-migration-tgt
 
 include:
   - resources/*.yml
-  - databricks.local.yml
 
 sync:
   paths:
     - src/notebooks
     - src/helpers
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Variable definitions — defaults are placeholders.
+# Override them in the "targets > default > variables" section below.
+# ──────────────────────────────────────────────────────────────────────────────
 variables:
   source_catalog:
     description: Source catalog (holds export volume)
@@ -35,7 +40,7 @@ variables:
     description: Export volume name in source catalog
     default: dashboard_migration
   import_volume:
-    description: Import volume name in target catalog
+    description: Import volume name in target catalog (auto-created by transfer job)
     default: dashboard_migration
   volume_base:
     description: Full path to import volume (used by deploy task)
@@ -50,10 +55,10 @@ variables:
     description: Workspace folder path for migrated dashboards
     default: /Shared/Migrated_Dashboards
   warehouse_id:
-    description: SQL warehouse ID for dashboard execution
+    description: SQL warehouse ID for dashboard execution (find in SQL Warehouses UI)
     default: ""
   warehouse_name:
-    description: SQL warehouse name (fallback)
+    description: SQL warehouse name (fallback if warehouse_id is empty)
     default: ""
   apply_permissions:
     description: Apply permissions to deployed dashboards (true/false)
@@ -71,15 +76,31 @@ variables:
     description: Preview only, do not create resources (true/false)
     default: "false"
 
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  EDIT HERE — replace placeholder values with your environment details      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
 targets:
   default:
     default: true
     workspace:
+      # CLI profile name from ~/.databrickscfg (created by: databricks auth login)
       profile: target-profile
+      # Target workspace URL (e.g. https://adb-789012.10.azuredatabricks.net)
       host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
     variables:
+      # Catalog in the SOURCE workspace that holds the export volume
       source_catalog: YOUR_SOURCE_CATALOG
+      # Catalog in the TARGET workspace that holds the import volume
       target_catalog: YOUR_TARGET_CATALOG
+      # Schema names (can differ between source and target)
       source_schema: default
       target_schema: default
+      # Volume names
+      export_volume: dashboard_migration
+      import_volume: dashboard_migration
+      # Full import volume path: /Volumes/<target_catalog>/<target_schema>/<import_volume>
       volume_base: /Volumes/YOUR_TARGET_CATALOG/default/dashboard_migration
+      # SQL warehouse ID (copy from SQL Warehouses > your warehouse > Connection details)
+      warehouse_id: ""
+      # Workspace folder where dashboards will be created
+      target_parent_path: /Shared/Migrated_Dashboards

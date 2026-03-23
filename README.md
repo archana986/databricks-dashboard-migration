@@ -101,14 +101,15 @@ git clone https://github.com/YOUR_ORG/dashboard-migration.git
 cd dashboard-migration
 ```
 
-Copy the local override examples and fill in your values:
+Edit the `databricks.yml` in each bundle folder with your values. Each file has a clearly marked **EDIT HERE** section at the bottom — replace the placeholder values with your workspace URL, CLI profile, catalog, schema, volume, and warehouse details.
 
 ```bash
-cp source/databricks.local.yml.example source/databricks.local.yml
-cp target/databricks.local.yml.example target/databricks.local.yml
+# Edit these two files:
+source/databricks.yml   # Source workspace: host, profile, catalog, volume_base
+target/databricks.yml   # Target workspace: host, profile, catalogs, schemas, volumes, warehouse_id, target folder
 ```
 
-Edit each `databricks.local.yml` with your workspace host, profile, catalogs, schemas, volume names, warehouse ID, and target folder path. These files are gitignored — your environment-specific values stay local. See [SETUP.md](SETUP.md) for the full variable reference.
+See [SETUP.md](SETUP.md) for the full variable reference.
 
 ### 2. Service principal in both workspaces (recommended)
 
@@ -244,7 +245,7 @@ Use [Databricks documentation for Lakeview dashboards](https://docs.databricks.c
 Some repos include an **optional** generate/deploy or asset-bundle path for advanced scenarios. The **default** DAB workflow for this tree is **source jobs + target `tgt_dashboard_register`**. If your fork adds a `generate_deploy` job or shell wrappers, follow that fork’s README.
 
 **Can I test from one machine without committing secrets?**  
-Yes. Use **`databricks.local.yml`** (gitignored) under `source/` and `target/` and keep tokens out of git. See examples in each folder’s `*.example` file.
+Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are stored in `databricks.yml`. Edit the `host` and `profile` fields and run `databricks auth login` to authenticate.
 
 ---
 
