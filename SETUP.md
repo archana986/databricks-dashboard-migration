@@ -315,11 +315,3 @@ After setup or any structural change:
 | `403 Forbidden` on target | SP lacks workspace permissions | Add SP to target workspace in Account Console |
 | `Connection to wrong workspace` | Wrong URL in yml | Verify `target_workspace_url` matches the target |
 
----
-
-## Git Guidelines
-
-- **Never commit** real workspace URLs, catalog names, warehouse IDs, or secrets.
-- The committed `databricks.yml` uses placeholders (e.g. `YOUR-SOURCE-WORKSPACE`). Update locally only.
-- Keep `auth_method`, `sp_secret_scope`, and generic config names in the repo (e.g. `migration_secrets`).
-- Secret scope values (`sp_client_id`, `sp_client_secret`) are stored via CLI, never in code.
