@@ -81,25 +81,29 @@ Terraform's Databricks provider is excellent for infrastructure-as-code but has 
 ## Technical Comparison
 
 ```mermaid
-flowchart LR
-    subgraph terraform [Terraform Approach]
-        T1[Manual JSON Export] --> T2[Edit catalog refs]
-        T2 --> T3[Write TF resource]
-        T3 --> T4[terraform apply]
-        T4 --> T5[Manual permissions]
-        T5 --> T6[Manual schedules]
+flowchart TD
+    subgraph terraform ["Terraform Approach (manual)"]
+        direction TB
+        T1["1. Manual JSON export"] --> T2["2. Hand-edit catalog refs"]
+        T2 --> T3["3. Write TF resource block"]
+        T3 --> T4["4. terraform apply"]
+        T4 --> T5["5. Manual permission sync"]
+        T5 --> T6["6. Schedules not supported"]
     end
-    
-    subgraph toolkit [This Toolkit]
-        K1[Auto Discovery] --> K2[Manual Approval]
-        K2 --> K3[Auto Transform]
-        K3 --> K4[Auto Permissions]
-        K4 --> K5[Auto Schedules]
-        K5 --> K6[Deploy SDK/Bundle]
+
+    subgraph toolkit ["This Toolkit (automated)"]
+        direction TB
+        K1["1. Auto inventory scan"] --> K2["2. Review and approve"]
+        K2 --> K3["3. Auto export and transform"]
+        K3 --> K4["4. Auto transfer via UC volume"]
+        K4 --> K5["5. Auto deploy with permissions"]
+        K5 --> K6["6. Auto schedules applied"]
     end
-    
-    style terraform fill:#ffe6e6
-    style toolkit fill:#e6ffe6
+
+    style terraform fill:#fff0f0,stroke:#cc0000
+    style toolkit fill:#f0fff0,stroke:#008800
+    style T6 fill:#ffcccc,stroke:#cc0000
+    style K6 fill:#ccffcc,stroke:#008800
 ```
 
 ## Summary
