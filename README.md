@@ -242,7 +242,6 @@ dashboard-migration/
 ├── catalog_schema_mapping_template.csv   # Template for catalog/schema remapping
 ├── SETUP.md                         # Detailed setup and variable reference
 ├── PREREQUISITES_CHECKLIST.md       # Pre-flight checklist with SQL and CLI
-├── REQUIREMENTS.md                  # Architecture and design assumptions
 └── WHY_THIS_TOOLKIT.md              # Comparison with Terraform
 ```
 
@@ -319,7 +318,6 @@ Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are 
 | Document | Use |
 |----------|-----|
 | [SETUP.md](SETUP.md) | Full setup, secrets, troubleshooting |
-| [REQUIREMENTS.md](REQUIREMENTS.md) | Architecture and assumptions |
 | [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist |
 | [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | vs Terraform and decision guide |
 | [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |

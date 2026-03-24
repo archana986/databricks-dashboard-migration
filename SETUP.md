@@ -2,7 +2,7 @@
 
 How to set up and use this Databricks Dashboard Migration toolkit for your own projects.
 
-**Design:** This toolkit uses **two bundles**—a **source** bundle (run in the source workspace for inventory, export, and transform) and a **target** bundle (run in the target workspace for transfer and install). The catalog (and export volume) is bound to the source workspace for copy/transfer of files; installation runs in the target workspace. See [REQUIREMENTS.md](REQUIREMENTS.md) for the full requirements and assumptions.
+**Design:** This toolkit uses **two bundles**—a **source** bundle (run in the source workspace for inventory, export, and transform) and a **target** bundle (run in the target workspace for transfer and install). The catalog (and export volume) is bound to the source workspace for copy/transfer of files; installation runs in the target workspace.
 
 ---
 
@@ -42,7 +42,6 @@ dashboard-migration/
   src/notebooks/              # Migration notebooks (Steps 1-4, transfer, deploy)
   src/helpers/                # Python modules
   src/setup-guides/           # SP OAuth docs + secrets notebook
-  REQUIREMENTS.md             # Migration need, two-bundle design, assumptions
   SETUP.md                    # This file
   README.md                   # Project overview
 ```
@@ -100,7 +99,7 @@ Both catalogs must be on the **same Unity Catalog metastore** for the transfer s
 
 Edit the `databricks.yml` file in each bundle folder directly. Each file has a clearly marked **EDIT HERE** section at the bottom where you replace placeholder values with your environment details.
 
-**Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore** (see [REQUIREMENTS.md](REQUIREMENTS.md)).
+**Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore**.
 
 Add the same **service principal** to **both** workspaces for automation; grant UC access on export and import volumes. See the **Service principal** section in [README.md](README.md) for grant SQL and `run_as` configuration.
 
