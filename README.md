@@ -113,12 +113,54 @@ See [SETUP.md](SETUP.md) for the full variable reference.
 
 ### 2. Service principal in both workspaces (recommended)
 
-1. In **Account Console**, create (or choose) a **service principal**.
-2. Add that SP to **both** the source and the target **workspace** (Permissions → at least **User**-level workspace access, or as required by your org).
-3. Grant the SP **Unity Catalog** privileges to read the **export volume** and read/write the **import volume**, and to **use** the target **warehouse** and the **schemas** that contain those volumes. See [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) for grant patterns (use your real catalog and volume names in SQL).
-4. If you use **OAuth client credentials** for any step that calls another workspace from a notebook, store **client ID and secret** in a **secret scope** on the workspace where that notebook runs—see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md).
+**Create or pick an SP:**
 
-To run the **target** job as the SP (so Lakeview API calls use the SP identity), set `run_as` on the job in `target/resources/tgt_dashboard_jobs.yml` as described in [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md).
+1. Open **Account Console** → **User management** → **Service principals**.
+2. **Add service principal** (or reuse an existing one). Copy its **Application (client) ID** (a UUID).
+
+**Add the SP to both workspaces:**
+
+3. Account Console → **Workspaces** → select workspace → **Permissions** → **Add** → select the SP → grant at least **User** access.
+4. Repeat for both source and target workspaces.
+
+**Grant Unity Catalog privileges** (run as a catalog owner or metastore admin):
+
+```sql
+-- Source catalog: read export volume
+GRANT USE CATALOG ON CATALOG <source_catalog> TO `<sp_application_id>`;
+GRANT USE SCHEMA  ON SCHEMA  <source_catalog>.<schema> TO `<sp_application_id>`;
+GRANT READ VOLUME ON VOLUME  <source_catalog>.<schema>.<export_volume> TO `<sp_application_id>`;
+
+-- Target catalog: read + write import volume
+GRANT USE CATALOG  ON CATALOG <target_catalog> TO `<sp_application_id>`;
+GRANT USE SCHEMA   ON SCHEMA  <target_catalog>.<schema> TO `<sp_application_id>`;
+GRANT READ VOLUME, WRITE VOLUME ON VOLUME <target_catalog>.<schema>.<import_volume> TO `<sp_application_id>`;
+```
+
+**Grant warehouse and folder access:**
+
+| Resource | Permission | Why |
+|----------|-----------|-----|
+| Target SQL warehouse | **Can use** | Dashboard queries run on this warehouse |
+| Target workspace folder (`target_parent_path`) | **CAN MANAGE** | SP creates dashboards here |
+| Job notebook paths (synced by bundle) | **CAN VIEW** | SP must read notebooks to execute tasks |
+
+**Configure run-as in the target bundle** (so the job executes as the SP):
+
+Add `run_as` to the job in `target/resources/tgt_dashboard_jobs.yml`:
+
+```yaml
+resources:
+  jobs:
+    tgt_dashboard_register:
+      name: "[Tgt] Dashboard Transfer & Deploy"
+      run_as:
+        service_principal_name: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+```
+
+Redeploy after this change: `databricks bundle deploy --profile YOUR_TARGET_PROFILE`
+
+**OAuth client credentials (optional):** If any notebook needs to call another workspace directly (M2M), store client ID and secret in a secret scope — see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md). The default transfer + deploy path does **not** need this.
 
 ### 3. Deploy and run (source)
 
@@ -178,7 +220,6 @@ Between **Inventory** and **Export & Transform**, review and approve in **`Bundl
 | `src/notebooks/` | Migration notebooks (shared by both bundles) |
 | `src/helpers/` | Python helpers |
 | `src/setup-guides/` | SP OAuth doc and secrets verification notebook |
-| `docs/` | Run-as-SP guide, optional single-workspace test notes |
 | `REQUIREMENTS.md` | Design assumptions (two bundles, same metastore) |
 | `SETUP.md` | Detailed setup and troubleshooting |
 
@@ -241,9 +282,6 @@ Re-running may recreate or update objects depending on notebook logic and duplic
 **Where do I get Lakeview / bundle help?**  
 Use [Databricks documentation for Lakeview dashboards](https://docs.databricks.com/dashboards/index.html) and [Databricks Asset Bundles](https://docs.databricks.com/dev-tools/bundles/index.html).
 
-**What about `Bundle_04` notebooks in `src/notebooks/`?**  
-Some repos include an **optional** generate/deploy or asset-bundle path for advanced scenarios. The **default** DAB workflow for this tree is **source jobs + target `tgt_dashboard_register`**. If your fork adds a `generate_deploy` job or shell wrappers, follow that fork’s README.
-
 **Can I test from one machine without committing secrets?**  
 Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are stored in `databricks.yml`. Edit the `host` and `profile` fields and run `databricks auth login` to authenticate.
 
@@ -258,10 +296,4 @@ Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are 
 | [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist |
 | [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | vs Terraform and decision guide |
 | [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |
-| [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) | UC grants and `run_as` for the target job |
 
----
-
-## Support and customization
-
-Fork or clone this repository and keep **environment-specific values** in local files or CI variables. Do not commit production URLs, catalog names, or secrets.

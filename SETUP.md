@@ -100,9 +100,9 @@ Both catalogs must be on the **same Unity Catalog metastore** for the transfer s
 
 Edit the `databricks.yml` file in each bundle folder directly. Each file has a clearly marked **EDIT HERE** section at the bottom where you replace placeholder values with your environment details.
 
-**Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore** (see [REQUIREMENTS.md](REQUIREMENTS.md)). Optional single-workspace test notes: [docs/SINGLE_WORKSPACE_OPTIONAL.md](docs/SINGLE_WORKSPACE_OPTIONAL.md).
+**Default topology:** **different** source and target workspaces on a **shared Unity Catalog metastore** (see [REQUIREMENTS.md](REQUIREMENTS.md)).
 
-Add the same **service principal** to **both** workspaces for automation; grant UC access on export and import volumes. See [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md) for `run_as` and grants.
+Add the same **service principal** to **both** workspaces for automation; grant UC access on export and import volumes. See the **Service principal** section in [README.md](README.md) for grant SQL and `run_as` configuration.
 
 ### Source bundle (`source/databricks.yml`)
 
@@ -138,7 +138,7 @@ Open `target/databricks.yml` and edit the **EDIT HERE** section:
 
 ## Step 3: Service principal (both workspaces) and optional OAuth secrets
 
-Add the **same service principal** to **source and target** workspaces for automation. Grant **Unity Catalog** access to export/import volumes and the target warehouse (see [docs/TARGET_JOB_RUN_AS_SP.md](docs/TARGET_JOB_RUN_AS_SP.md)).
+Add the **same service principal** to **source and target** workspaces for automation. Grant **Unity Catalog** access to export/import volumes and the target warehouse (see the **Service principal** section in [README.md](README.md)).
 
 **OAuth client ID + secret** in a secret scope are for notebooks or tools that use **machine-to-machine** auth (see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md)). The default **transfer + deploy** job path uses the **job run identity** in the target workspace, not cross-workspace OAuth.
 
