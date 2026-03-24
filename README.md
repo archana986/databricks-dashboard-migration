@@ -213,24 +213,51 @@ Between **Inventory** and **Export & Transform**, review and approve in **`Bundl
 
 ## Repository layout
 
-| Path | Purpose |
-|------|---------|
-| `source/` | Source bundle: `databricks.yml`, `resources/src_dashboard_jobs.yml` |
-| `target/` | Target bundle: `databricks.yml`, `resources/tgt_dashboard_jobs.yml` |
-| `src/notebooks/` | Migration notebooks (shared by both bundles) |
-| `src/helpers/` | Python helpers |
-| `src/setup-guides/` | SP OAuth doc and secrets verification notebook |
-| `REQUIREMENTS.md` | Design assumptions (two bundles, same metastore) |
-| `SETUP.md` | Detailed setup and troubleshooting |
+This repo has **two independent bundles** (`source/` and `target/`) that share common code via `src/`. Each bundle is deployed separately to its own workspace.
 
-**Symlink requirement:** Each bundle directory (`source/`, `target/`) contains a symlink `src` -> `../src` so that job notebook paths resolve correctly. After cloning, verify these exist:
+```
+dashboard-migration/
+├── source/                          # Source bundle (deploy to source workspace)
+│   ├── databricks.yml               #   EDIT HERE: source host, profile, catalog, volume
+│   ├── resources/
+│   │   └── src_dashboard_jobs.yml   #   Job definitions: Inventory + Export & Transform
+│   └── src -> ../src                #   Symlink to shared code (see below)
+│
+├── target/                          # Target bundle (deploy to target workspace)
+│   ├── databricks.yml               #   EDIT HERE: target host, profile, catalogs, warehouse
+│   ├── resources/
+│   │   └── tgt_dashboard_jobs.yml   #   Job definition: Transfer & Deploy
+│   └── src -> ../src                #   Symlink to shared code (see below)
+│
+├── src/                             # Shared code (used by both bundles)
+│   ├── notebooks/
+│   │   ├── Bundle_01_Inventory_Generation.ipynb
+│   │   ├── Bundle_02_Review_and_Approve_Inventory.ipynb
+│   │   ├── Bundle_03_Export_and_Transform.ipynb
+│   │   ├── Transfer_Volume_Dashboard.ipynb
+│   │   └── Deploy_Dashboards_Target.ipynb
+│   ├── helpers/                     #   Python helper modules
+│   └── setup-guides/                #   SP OAuth setup doc + secrets notebook
+│
+├── catalog_schema_mapping_template.csv   # Template for catalog/schema remapping
+├── SETUP.md                         # Detailed setup and variable reference
+├── PREREQUISITES_CHECKLIST.md       # Pre-flight checklist with SQL and CLI
+├── REQUIREMENTS.md                  # Architecture and design assumptions
+└── WHY_THIS_TOOLKIT.md              # Comparison with Terraform
+```
+
+**Why two bundles?** Each bundle targets a different workspace (`workspace.host`). You run `databricks bundle deploy` from `source/` against the source workspace, and from `target/` against the target workspace. They never cross-reference each other at deploy time.
+
+**How shared code works:** Both bundles need the same notebooks and helpers. Instead of duplicating `src/`, each bundle directory contains a **symlink** (`src -> ../src`). The bundle's `sync.paths` setting syncs this symlinked `src/` into the workspace when you deploy.
+
+**Symlink check:** After cloning, verify the symlinks exist:
 
 ```bash
 ls -la source/src target/src
-# Both should point to ../src
+# Both should show: src -> ../src
 ```
 
-If missing (e.g. on Windows or after a shallow export), recreate them:
+If missing (e.g. on Windows or after a shallow clone), recreate them:
 
 ```bash
 cd source && ln -sfn ../src src && cd ../target && ln -sfn ../src src
