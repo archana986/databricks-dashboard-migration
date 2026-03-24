@@ -64,7 +64,7 @@ sequenceDiagram
   participant Tgt as Target workspace
   You->>Src: Deploy source bundle
   You->>Src: Run inventory job
-  You->>Src: Review and approve in Bundle_02
+  You->>Src: Review and approve in Src_02
   You->>Src: Run export and transform job
   Src->>Vol: Write inventory, export, transform, CSVs
   You->>Tgt: Deploy target bundle
@@ -160,7 +160,7 @@ resources:
 
 Redeploy after this change: `databricks bundle deploy --profile YOUR_TARGET_PROFILE`
 
-**OAuth client credentials (optional):** If any notebook needs to call another workspace directly (M2M), store client ID and secret in a secret scope — see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md). The default transfer + deploy path does **not** need this.
+**OAuth client credentials (optional):** If any notebook needs to call another workspace directly (M2M), store client ID and secret in a secret scope — see [source/setup-guides/SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md). The default transfer + deploy path does **not** need this.
 
 ### 3. Deploy and run (source)
 
@@ -170,7 +170,7 @@ databricks bundle deploy --profile YOUR_SOURCE_PROFILE
 databricks bundle run src_dashboard_inventory --profile YOUR_SOURCE_PROFILE
 ```
 
-Open **`Bundle_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as `inventory_approved.csv` under `dashboard_inventory_approved/` in your export volume. The Export & Transform job reads this exact file.
+Open **`Src_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as `inventory_approved.csv` under `dashboard_inventory_approved/` in your export volume. The Export & Transform job reads this exact file.
 
 ```bash
 databricks bundle run src_dashboard_export_transform --profile YOUR_SOURCE_PROFILE
@@ -207,13 +207,13 @@ The target job runs **transfer** (copy artifacts from the source export volume i
 | Source | `[Src] Dashboard Export & Transform` | `src_dashboard_export_transform` | Exports and transforms approved dashboards |
 | Target | `[Tgt] Dashboard Transfer & Deploy` | `tgt_dashboard_register` | Copies volume data and creates dashboards in target |
 
-Between **Inventory** and **Export & Transform**, review and approve in **`Bundle_02_Review_and_Approve_Inventory.ipynb`** (manual, no scheduled job).
+Between **Inventory** and **Export & Transform**, review and approve in **`Src_02_Review_and_Approve_Inventory.ipynb`** (manual, no scheduled job).
 
 ---
 
 ## Repository layout
 
-This repo has **two independent bundles** (`source/` and `target/`) that share common code via `src/`. Each bundle is deployed separately to its own workspace.
+Each bundle is **completely self-contained** with its own notebooks and helpers. No symlinks, no shared directories, no cross-dependencies.
 
 ```
 dashboard-migration/
@@ -221,23 +221,21 @@ dashboard-migration/
 │   ├── databricks.yml               #   EDIT HERE: source host, profile, catalog, volume
 │   ├── resources/
 │   │   └── src_dashboard_jobs.yml   #   Job definitions: Inventory + Export & Transform
-│   └── src -> ../src                #   Symlink to shared code (see below)
+│   ├── notebooks/
+│   │   ├── Src_01_Inventory_Generation.ipynb
+│   │   ├── Src_02_Review_and_Approve_Inventory.ipynb
+│   │   └── Src_03_Export_and_Transform.ipynb
+│   ├── helpers/                     #   Python modules (discovery, export, transform, etc.)
+│   └── setup-guides/                #   SP OAuth setup doc + secrets notebook
 │
 ├── target/                          # Target bundle (deploy to target workspace)
 │   ├── databricks.yml               #   EDIT HERE: target host, profile, catalogs, warehouse
 │   ├── resources/
 │   │   └── tgt_dashboard_jobs.yml   #   Job definition: Transfer & Deploy
-│   └── src -> ../src                #   Symlink to shared code (see below)
-│
-├── src/                             # Shared code (used by both bundles)
 │   ├── notebooks/
-│   │   ├── Bundle_01_Inventory_Generation.ipynb
-│   │   ├── Bundle_02_Review_and_Approve_Inventory.ipynb
-│   │   ├── Bundle_03_Export_and_Transform.ipynb
-│   │   ├── Transfer_Volume_Dashboard.ipynb
-│   │   └── Deploy_Dashboards_Target.ipynb
-│   ├── helpers/                     #   Python helper modules
-│   └── setup-guides/                #   SP OAuth setup doc + secrets notebook
+│   │   ├── Tgt_01_Transfer_Volume.ipynb
+│   │   └── Tgt_02_Deploy_Dashboards.ipynb
+│   └── helpers/                     #   Python modules (deployment_package, sdk_deployer)
 │
 ├── catalog_schema_mapping_template.csv   # Template for catalog/schema remapping
 ├── SETUP.md                         # Detailed setup and variable reference
@@ -247,27 +245,14 @@ dashboard-migration/
 
 **Why two bundles?** Each bundle targets a different workspace (`workspace.host`). You run `databricks bundle deploy` from `source/` against the source workspace, and from `target/` against the target workspace. They never cross-reference each other at deploy time.
 
-**How shared code works:** Both bundles need the same notebooks and helpers. Instead of duplicating `src/`, each bundle directory contains a **symlink** (`src -> ../src`). The bundle's `sync.paths` setting syncs this symlinked `src/` into the workspace when you deploy.
-
-**Symlink check:** After cloning, verify the symlinks exist:
-
-```bash
-ls -la source/src target/src
-# Both should show: src -> ../src
-```
-
-If missing (e.g. on Windows or after a shallow clone), recreate them:
-
-```bash
-cd source && ln -sfn ../src src && cd ../target && ln -sfn ../src src
-```
+**Why separate code in each bundle?** The source bundle only needs inventory, export, and transform logic. The target bundle only needs transfer and deployment logic. Keeping them independent means you can hand off just the `target/` folder to a target workspace team without dragging in source-specific code.
 
 ---
 
 ## FAQ
 
 **Why two bundles instead of one?**  
-Source and target are **different workspaces**. Each bundle sets `workspace.host` for where notebooks run. That keeps auth simple: OAuth in each workspace, no embedded cross-workspace tokens in the default transfer/deploy path.
+Source and target are **different workspaces**. Each bundle sets `workspace.host` for where notebooks run and contains only the notebooks and helpers it needs. That keeps auth simple and means each bundle is fully independent -- no symlinks, no shared directories.
 
 **Why must source and target share a metastore?**  
 The **transfer** step copies files between UC volume locations. Both catalogs must be visible to the **target** workspace’s compute for that copy to succeed. If your metastores differ, use **Delta Sharing**, **volume replication**, or another approved copy path—then adjust your process (not covered in the default notebooks).
@@ -320,5 +305,5 @@ Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are 
 | [SETUP.md](SETUP.md) | Full setup, secrets, troubleshooting |
 | [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist |
 | [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | vs Terraform and decision guide |
-| [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |
+| [source/setup-guides/SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |
 

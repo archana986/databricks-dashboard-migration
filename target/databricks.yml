@@ -13,11 +13,12 @@ bundle:
 
 include:
   - resources/*.yml
+  - databricks.local.yml
 
 sync:
   paths:
-    - src/notebooks
-    - src/helpers
+    - notebooks
+    - helpers
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Variable definitions — defaults are placeholders.

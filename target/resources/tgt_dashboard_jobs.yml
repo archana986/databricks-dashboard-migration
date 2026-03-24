@@ -14,7 +14,7 @@ resources:
       tasks:
         - task_key: transfer
           notebook_task:
-            notebook_path: ../src/notebooks/Transfer_Volume_Dashboard.ipynb
+            notebook_path: ../notebooks/Tgt_01_Transfer_Volume.ipynb
             base_parameters:
               source_catalog: ${var.source_catalog}
               target_catalog: ${var.target_catalog}
@@ -27,7 +27,7 @@ resources:
           depends_on:
             - task_key: transfer
           notebook_task:
-            notebook_path: ../src/notebooks/Deploy_Dashboards_Target.ipynb
+            notebook_path: ../notebooks/Tgt_02_Deploy_Dashboards.ipynb
             base_parameters:
               volume_base: ${var.volume_base}
               exported_path: ${var.exported_path}

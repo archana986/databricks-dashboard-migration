@@ -263,15 +263,18 @@ def validate_permissions(config: Dict) -> Tuple[bool, List[str]]:
         # Validate permission access using ONE dashboard
         if dashboard_id:
             try:
-                # Try to get permissions for this specific dashboard
                 perms = client.permissions.get("dashboards", dashboard_id)
-                # Success - user has permission access
             except Exception as e:
-                errors.append(f"Cannot read dashboard permissions: {str(e)}")
+                if "does not exist" in str(e):
+                    warnings.append(f"Stale dashboard ID in inventory (deleted?): {dashboard_id}. Falling back to API check.")
+                    try:
+                        next(iter(client.lakeview.list()), None)
+                    except Exception as e2:
+                        errors.append(f"Cannot access Lakeview API: {str(e2)}")
+                else:
+                    errors.append(f"Cannot read dashboard permissions: {str(e)}")
         else:
-            # No inventory yet - just verify basic Lakeview API access with single item
             try:
-                # Use iterator to get just first item (not full list)
                 next(iter(client.lakeview.list()), None)
             except Exception as e:
                 errors.append(f"Cannot access Lakeview API: {str(e)}")

@@ -135,14 +135,14 @@ def _find_and_replace_references(text: str, mappings: List[Dict], debug: bool = 
             # Use word boundaries to avoid partial matches
             result = re.sub(rf'\b{re.escape(old_ref)}\b', new_ref, result)
         
-        # Replace schema references: catalog.schema
+        # Replace schema references: catalog.schema (including when followed by .table)
         if old_cat and old_schema and not old_table and new_cat and new_schema:
             old_ref = f"{old_cat}.{old_schema}"
             new_ref = f"{new_cat}.{new_schema}"
             if debug:
                 print(f"      Schema: '{old_ref}' → '{new_ref}'")
-            # Negative lookahead: don't replace if followed by a dot (already handled above)
-            result = re.sub(rf'\b{re.escape(old_ref)}(?!\.)', new_ref, result)
+            # Replace all occurrences of catalog.schema (whether or not followed by .table)
+            result = re.sub(rf'\b{re.escape(old_ref)}\b', new_ref, result)
         
         # Replace catalog-only references
         if old_cat and new_cat:

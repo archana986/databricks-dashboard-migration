@@ -29,30 +29,26 @@ git clone https://github.com/YOUR_ORG/dashboard-migration.git
 cd dashboard-migration
 ```
 
-After cloning, verify the structure and symlinks:
+After cloning, verify the structure:
 
 ```
 dashboard-migration/
-  source/databricks.yml       # Source bundle (edit for source workspace)
-  source/resources/           # Source job definitions
-  source/src -> ../src        # Symlink to shared code (required)
-  target/databricks.yml       # Target bundle (edit for target workspace)
-  target/resources/           # Target job definitions (transfer + deploy)
-  target/src -> ../src        # Symlink to shared code (required)
-  src/notebooks/              # Migration notebooks (Steps 1-4, transfer, deploy)
-  src/helpers/                # Python modules
-  src/setup-guides/           # SP OAuth docs + secrets notebook
+  source/                     # Source bundle (deploy to source workspace)
+    databricks.yml            #   EDIT HERE: source host, profile, catalog, volume
+    resources/                #   Source job definitions
+    notebooks/                #   Src_01, Src_02, Src_03
+    helpers/                  #   Python modules (discovery, export, transform, etc.)
+    setup-guides/             #   SP OAuth docs + secrets notebook
+  target/                     # Target bundle (deploy to target workspace)
+    databricks.yml            #   EDIT HERE: target host, profile, catalogs, warehouse
+    resources/                #   Target job definitions (transfer + deploy)
+    notebooks/                #   Tgt_01_Transfer_Volume, Tgt_02_Deploy_Dashboards
+    helpers/                  #   Python modules (deployment_package, sdk_deployer)
   SETUP.md                    # This file
   README.md                   # Project overview
 ```
 
-**Verify symlinks exist** (required for bundle deploy):
-
-```bash
-ls -la source/src target/src
-# Both should be symlinks to ../src
-# If missing, recreate: cd source && ln -sfn ../src src && cd ../target && ln -sfn ../src src
-```
+Each bundle is self-contained with its own notebooks and helpers. No symlinks or shared directories.
 
 ---
 
@@ -139,7 +135,7 @@ Open `target/databricks.yml` and edit the **EDIT HERE** section:
 
 Add the **same service principal** to **source and target** workspaces for automation. Grant **Unity Catalog** access to export/import volumes and the target warehouse (see the **Service principal** section in [README.md](README.md)).
 
-**OAuth client ID + secret** in a secret scope are for notebooks or tools that use **machine-to-machine** auth (see [src/setup-guides/SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md)). The default **transfer + deploy** job path uses the **job run identity** in the target workspace, not cross-workspace OAuth.
+**OAuth client ID + secret** in a secret scope are for notebooks or tools that use **machine-to-machine** auth (see [source/setup-guides/SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md)). The default **transfer + deploy** job path uses the **job run identity** in the target workspace, not cross-workspace OAuth.
 
 ### 3a. Create a Service Principal
 
@@ -177,9 +173,9 @@ databricks secrets put-secret migration_secrets sp_client_secret --profile <sour
 
 ### 3e. Verify (Optional)
 
-After deploying the **source** bundle, open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) in the Databricks workspace UI if you use SP OAuth from notebooks. Set the config cell and run the verification cells to confirm connectivity.
+After deploying the **source** bundle, open [Setup_Migration_Secrets.ipynb](source/setup-guides/Setup_Migration_Secrets.ipynb) in the Databricks workspace UI if you use SP OAuth from notebooks. Set the config cell and run the verification cells to confirm connectivity.
 
-See [SP_OAUTH_SETUP.md](src/setup-guides/SP_OAUTH_SETUP.md) for the full detailed guide.
+See [SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md) for the full detailed guide.
 
 ---
 
@@ -209,7 +205,7 @@ databricks bundle run src_dashboard_inventory --profile <source-profile>
 ```
 
 **Step 2 — Review and approve (UI)**  
-Open [Bundle_02_Review_and_Approve_Inventory.ipynb](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as:
+Open [Src_02_Review_and_Approve_Inventory.ipynb](source/notebooks/Src_02_Review_and_Approve_Inventory.ipynb) in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as:
 
 ```
 <volume_base>/dashboard_inventory_approved/inventory_approved.csv
@@ -286,8 +282,6 @@ databricks bundle run tgt_dashboard_register --profile <target-profile>
 
 This copies data from the **source export volume** to the **target import volume** (same metastore), then creates dashboards under `target_parent_path` and applies permissions/schedules per job parameters.
 
-> **Optional / alternate flows:** Some forks include `Bundle_04_*` notebooks or shell scripts for asset-bundle-based publish paths. This repository’s **default** Databricks Asset Bundle definitions are the jobs above.
-
 ---
 
 ## Verification Checklist
@@ -298,8 +292,8 @@ After setup or any structural change:
 2. Deploy each bundle with the correct profile (`<source-profile>` vs `<target-profile>`)
 3. Run `src_dashboard_inventory`, then `src_dashboard_export_transform` on the source side — confirm no `ModuleNotFoundError`
 4. Run `tgt_dashboard_register` on the target side — confirm transfer and deploy tasks succeed
-5. Open [Bundle_02](src/notebooks/Bundle_02_Review_and_Approve_Inventory.ipynb) in the source UI — run path cell and helper imports if you run it ad hoc
-6. If using SP OAuth from notebooks, open [Setup_Migration_Secrets.ipynb](src/setup-guides/Setup_Migration_Secrets.ipynb) and run verify / connection cells
+5. Open [Src_02](source/notebooks/Src_02_Review_and_Approve_Inventory.ipynb) in the source UI — run path cell and helper imports if you run it ad hoc
+6. If using SP OAuth from notebooks, open [Setup_Migration_Secrets.ipynb](source/setup-guides/Setup_Migration_Secrets.ipynb) and run verify / connection cells
 
 ---
 
@@ -307,7 +301,7 @@ After setup or any structural change:
 
 | Error | Cause | Fix |
 |---|---|---|
-| `ModuleNotFoundError: No module named 'helpers'` | `sys.path` missing `src/` | Run the path-resolution cell at the top of the notebook |
+| `ModuleNotFoundError: No module named 'helpers'` | `sys.path` not set correctly | Run the path-resolution cell at the top of the notebook |
 | `Missing secrets: ['sp_client_id', 'sp_client_secret']` | Secrets not stored in scope | Run `databricks secrets put-secret` for both keys via CLI |
 | `Secret scope does not exist` | Scope not created | Run `databricks secrets create-scope migration_secrets --profile <source-profile>` |
 | `401 Unauthorized` on target | SP OAuth secret invalid or expired | Regenerate in Account Console, re-store via CLI |

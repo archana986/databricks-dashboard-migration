@@ -1,9 +1,9 @@
 # ============================================================================
 # Databricks Dashboard Migration Toolkit - .gitignore
 # ============================================================================
-# Only exemplar files are tracked. Everything else is ignored.
 # Exemplar structure:
-#   databricks.yml, resources/, src/, scripts/, ip-detection/
+#   source/ (source bundle: databricks.yml, resources/, notebooks/, helpers/)
+#   target/ (target bundle: databricks.yml, resources/, notebooks/, helpers/)
 #   SETUP.md, README.md, WHY_THIS_TOOLKIT.md, catalog_schema_mapping_template.csv
 # ============================================================================
 
@@ -19,6 +19,9 @@ env/
 # ----- Databricks bundle state -----
 .databricks/
 ip-detection/.databricks/
+
+# ----- Legacy shared src/ (now split into source/ and target/) -----
+src/
 
 # ----- Archive (old docs, scripts, notebooks - not part of exemplar) -----
 archive/

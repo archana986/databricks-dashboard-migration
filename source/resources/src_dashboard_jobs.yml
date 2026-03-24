@@ -1,11 +1,11 @@
 # Source workflow: inventory + export & transform. No target workspace calls.
-# Step 2 (review/approve) is manual in UI via Bundle_02.
+# Step 2 (review/approve) is manual in UI via Src_02.
 
 resources:
   jobs:
     src_dashboard_inventory:
       name: "[Src] Dashboard Inventory"
-      description: "Scan source workspace dashboards and generate an inventory CSV. Review and approve in Bundle_02 before running Export & Transform."
+      description: "Scan source workspace dashboards and generate an inventory CSV. Review and approve in Src_02 before running Export & Transform."
       tags:
         project: "dashboard-migration"
         step: "inventory"
@@ -13,7 +13,7 @@ resources:
       tasks:
         - task_key: generate_inventory
           notebook_task:
-            notebook_path: ../src/notebooks/Bundle_01_Inventory_Generation.ipynb
+            notebook_path: ../notebooks/Src_01_Inventory_Generation.ipynb
             base_parameters:
               catalog: ${var.catalog}
               volume_base: ${var.volume_base}
@@ -23,7 +23,7 @@ resources:
 
     src_dashboard_export_transform:
       name: "[Src] Dashboard Export & Transform"
-      description: "Export approved dashboards and transform catalog/schema references. Requires inventory review (Bundle_02) completed first."
+      description: "Export approved dashboards and transform catalog/schema references. Requires inventory review (Src_02) completed first."
       tags:
         project: "dashboard-migration"
         step: "export-transform"
@@ -31,7 +31,7 @@ resources:
       tasks:
         - task_key: export_and_transform
           notebook_task:
-            notebook_path: ../src/notebooks/Bundle_03_Export_and_Transform.ipynb
+            notebook_path: ../notebooks/Src_03_Export_and_Transform.ipynb
             base_parameters:
               catalog: ${var.catalog}
               volume_base: ${var.volume_base}
