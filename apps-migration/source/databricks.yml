@@ -1,0 +1,50 @@
+# Source bundle — deploy to the workspace where apps are exported from.
+# Inventory → approve → export app source as DAB-style folders under a UC volume.
+#
+# Setup:
+#   1. databricks auth login -p <your-profile> --host <your-workspace-url>
+#   2. cp databricks.local.yml.example databricks.local.yml and set profile, host, catalog, schema, volume, target_host
+#   3. cd source && databricks bundle deploy -p <your-profile>
+
+bundle:
+  name: apps_migration_source
+
+include:
+  - resources/*.yml
+  - databricks.local.yml
+
+sync:
+  paths:
+    - notebooks
+    - scripts
+
+variables:
+  catalog:
+    description: Catalog for migration artifacts (inventory, bundles on volume)
+    default: YOUR_SOURCE_CATALOG
+  target_catalog:
+    description: Target catalog name for prereq copy / documentation
+    default: YOUR_TARGET_CATALOG
+  schema:
+    description: Schema for volume
+    default: apps_migration
+  volume:
+    description: Volume name
+    default: apps_migration
+  target_host:
+    description: Target workspace URL (embedded in exported bundle templates)
+    default: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: source-profile
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Users/${workspace.current_user.userName}/.bundle/${bundle.name}
+    variables:
+      catalog: YOUR_SOURCE_CATALOG
+      target_catalog: YOUR_TARGET_CATALOG
+      schema: apps_migration
+      volume: apps_migration
+      target_host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com

@@ -1,309 +1,375 @@
-# Lakeview dashboard migration toolkit
+# Databricks migration toolkits
 
-Move **Databricks Lakeview (AI/BI) dashboards** from a **source workspace** to a **target workspace** while keeping **permissions**, **schedules**, and **subscriptions** aligned with your new **catalog and schema** names.
+**Empower your analytics teams to migrate Databricks assets — Lakeview dashboards, Unity Catalog–registered models, Genie spaces, and Databricks Apps — across workspaces and catalogs.**
 
-This toolkit uses **two Databricks Asset Bundles**: you deploy and run the **source** bundle only in the source workspace, and the **target** bundle only in the target workspace. A **shared Unity Catalog metastore** (and volumes under it) carries the files between workspaces—no cross-workspace passwords in the notebooks for the main path.
-
-**Who this is for:** Teams doing workspace consolidation, environment promotion (e.g. non-prod → prod), or catalog changes where dashboards must be recreated in a new workspace with updated table references.
+> **Repository name:** This repo is currently named [`databricks-dashboard-migration`](https://github.com/archana986/databricks-dashboard-migration) on GitHub. **It will be renamed in the coming weeks** to better reflect that it contains **four** migration toolkits (not only dashboards). After the rename, update your `git remote` URL if you have already cloned or forked the project.
 
 ---
 
-## What you get
+## The Challenge: Data Mesh and Organizational Change
 
-| Output | Description |
-|--------|-------------|
-| **Inventory** | List of dashboards to migrate (you review and approve in the UI). |
-| **Export + transform** | Dashboard definitions plus metadata written to a Unity Catalog **export volume**. |
-| **Transfer + install** | In the target workspace, files are copied to an **import volume**, then dashboards are created under your chosen **workspace folder**. |
-| **Optional mapping** | Catalog/schema/table rewrites driven by a mapping file on the volume when transformation is enabled. |
+When organizations adopt **Data Mesh**, undergo **workspace consolidation**, or restructure teams, analytics assets don't move themselves. Teams face a critical challenge:
 
-**Out of scope for Terraform:** Lakeview objects, cross-workspace dashboard install, and rich schedule/subscription metadata are not covered by the Databricks Terraform provider the same way—this toolkit is built for that gap. See [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) for a comparison.
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                 │
+│   "We're reorganizing into domains. Each team now owns their data products."   │
+│                                                                                 │
+│   "Great! But what about our 200+ dashboards, trained models, and Genie        │
+│    spaces? They all point to the old catalogs and live in the wrong workspace."│
+│                                                                                 │
+│   "Can't you just... copy them?"                                               │
+│                                                                                 │
+│   "It's not that simple. Permissions, schedules, subscriptions, catalog        │
+│    references, model versions, app configurations... none of that copies."     │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+This toolkit collection solves that problem.
 
 ---
 
-## How it fits together (two workspaces)
+## Why Terraform Isn't Enough
+
+Terraform is excellent for **infrastructure-as-code**, but analytics asset migration has unique requirements that Terraform doesn't address:
+
+| Requirement | Terraform | These Toolkits |
+|-------------|-----------|----------------|
+| **Lakeview Dashboards** | ❌ Legacy dashboards only | ✅ Full AI/BI dashboard support |
+| **Cross-Workspace Migration** | ❌ Complex state management | ✅ Native cross-workspace design |
+| **Catalog/Schema Remapping** | ❌ Manual JSON editing | ✅ CSV-driven transformation |
+| **Permission Preservation** | ❌ Separate resource; manual sync | ✅ Automatic ACL capture & apply |
+| **Schedules & Subscriptions** | ❌ Not supported | ✅ Full metadata migration |
+| **Model Version History** | ❌ Not supported | ✅ All versions migrated |
+| **Genie Space Instructions** | ❌ Not supported | ✅ Instructions & examples preserved |
+| **App Configurations** | ❌ Not supported | ✅ Full app state migration |
+| **Approval Workflow** | ❌ None | ✅ Review before migration |
+| **Inventory Discovery** | ❌ Manual | ✅ Automated from system tables |
+
+### The Core Problem
 
 ```mermaid
-flowchart TB
-  subgraph acct [Databricks account]
-    SP[Service principal]
-  end
-  subgraph src_ws [Source workspace]
-    SJOBS[Source bundle jobs]
-    SVOL[(Export volume in source catalog)]
-    SJOBS --> SVOL
-  end
-  subgraph metastore [Shared Unity Catalog metastore]
-    SVOL -.->|same metastore| TVOL
-  end
-  subgraph tgt_ws [Target workspace]
-    TJOBS[Target bundle job]
-    TVOL[(Import volume in target catalog)]
-    DASH[Dashboards in target folder]
-    TJOBS --> TVOL
-    TJOBS --> DASH
-  end
-  SP -->|access| src_ws
-  SP -->|access| tgt_ws
+flowchart LR
+    subgraph before ["❌ Before: Manual Migration"]
+        M1["Export JSON"] --> M2["Edit refs"] --> M3["Recreate"] --> M4["Set perms"] --> M5["Add schedules"] --> M6["🤞 Hope"]
+    end
+
+    subgraph after ["✅ After: These Toolkits"]
+        A1["Discover"] --> A2["Review"] --> A3["Migrate"] --> A4["Done!"]
+    end
+
+    before -.->|"Hours per asset"| X1["😫"]
+    after -.->|"Minutes for 100s"| X2["🎉"]
+
+    style before fill:#fff0f0,stroke:#cc0000
+    style after fill:#f0fff0,stroke:#008800
 ```
-
-**Typical roles**
-
-- **Humans** use **two CLI profiles** (or OAuth logins)—one for source, one for target.
-- **Automation** uses a **service principal** that is added to **both** workspaces and granted Unity Catalog rights on the export volume (source catalog) and import volume (target catalog), plus use of the target **SQL warehouse** and permissions on the **target folder** for dashboards.
 
 ---
 
-## End-to-end workflow
+## What Gets Migrated
+
+Each toolkit handles the complete lifecycle of its asset type:
+
+### Dashboard Migration
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  WHAT MOVES                          │  WHAT TRANSFORMS             │
+├─────────────────────────────────────────────────────────────────────┤
+│  ✓ Dashboard definition              │  ✓ Catalog references        │
+│  ✓ All visualizations & layouts      │  ✓ Schema references         │
+│  ✓ Embedded datasets & queries       │  ✓ Table/view names          │
+│  ✓ Access permissions (ACLs)         │  ✓ Volume paths              │
+│  ✓ Refresh schedules                 │                              │
+│  ✓ Email subscriptions               │                              │
+│  ✓ Filter defaults                   │                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Model Migration
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  WHAT MOVES                          │  WHAT TRANSFORMS             │
+├─────────────────────────────────────────────────────────────────────┤
+│  ✓ All model versions                │  ✓ Catalog registration      │
+│  ✓ Model artifacts & weights         │  ✓ Schema placement          │
+│  ✓ Model signature & metadata        │  ✓ Alias assignments         │
+│  ✓ Version descriptions              │  ✓ Environment promotion     │
+│  ✓ Tags and properties               │    (dev → stage → prod)      │
+│  ✓ Lineage information               │                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Genie Space Migration
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  WHAT MOVES                          │  WHAT TRANSFORMS             │
+├─────────────────────────────────────────────────────────────────────┤
+│  ✓ Space configuration               │  ✓ Table references          │
+│  ✓ Custom instructions               │  ✓ Catalog/schema paths      │
+│  ✓ Example questions                 │  ✓ Sample query updates      │
+│  ✓ Included tables list              │                              │
+│  ✓ Access permissions                │                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### Databricks Apps Migration
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│  WHAT MOVES                          │  WHAT TRANSFORMS             │
+├─────────────────────────────────────────────────────────────────────┤
+│  ✓ App source code                   │  ✓ Catalog connections       │
+│  ✓ App configuration (app.yaml)      │  ✓ SQL Warehouse refs        │
+│  ✓ Environment variables             │  ✓ Model endpoint refs       │
+│  ✓ Resource bindings                 │  ✓ Secret scope refs         │
+│  ✓ Deployment settings               │                              │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Architecture: How It Works
+
+All toolkits follow the same secure, proven pattern:
 
 ```mermaid
-sequenceDiagram
-  participant You
-  participant Src as Source workspace
-  participant Vol as UC volumes
-  participant Tgt as Target workspace
-  You->>Src: Deploy source bundle
-  You->>Src: Run inventory job
-  You->>Src: Review and approve in Src_02
-  You->>Src: Run export and transform job
-  Src->>Vol: Write inventory, export, transform, CSVs
-  You->>Tgt: Deploy target bundle
-  You->>Tgt: Run transfer and deploy job
-  Tgt->>Vol: Read export path, write import path
-  Tgt->>Tgt: Create dashboards, apply metadata
+flowchart LR
+    subgraph source ["SOURCE WORKSPACE"]
+        S1["📊 Assets"] --> S2["Discovery"] --> S3["Export"] --> S4[("Export Volume")]
+    end
+
+    subgraph uc ["UNITY CATALOG"]
+        S4 --> UC1["🔒 Service Principal<br/>dual-workspace access"] --> T1
+    end
+
+    subgraph target ["TARGET WORKSPACE"]
+        T1[("Import Volume")] --> T2["Transform"] --> T3["Deploy"] --> T4["📊 Assets"]
+    end
+
+    style source fill:#e6f3ff,stroke:#0066cc
+    style uc fill:#fff2e6,stroke:#cc6600
+    style target fill:#e6ffe6,stroke:#008800
+```
+
+### Why This Architecture?
+
+1. **Service Principal with Cross-Workspace Access** — A single service principal with access to both source and target workspaces handles authentication. This provides secure, auditable, and consistent access across the migration path.
+
+2. **Unity Catalog Volumes for Transfer** — Model artifacts and exported metadata flow through UC volumes on the shared metastore, providing governed storage with lineage tracking.
+
+3. **Audit Trail** — Everything flows through Unity Catalog, so you have lineage and audit logs of what moved where.
+
+4. **Transformation Layer** — Catalog/schema remapping happens during import, driven by a simple CSV file you control.
+
+5. **Approval Workflow** — Inventory is generated first, so you can review and approve before any migration happens.
+
+---
+
+## Migration Scenarios
+
+These toolkits are designed for real organizational changes:
+
+### Scenario 1: Data Mesh Adoption
+```
+BEFORE                              AFTER
+──────                              ─────
+Central workspace                   Domain workspaces
+├── All dashboards                  ├── Sales domain
+├── All models                      │   ├── Sales dashboards
+└── All Genie spaces                │   ├── Sales models
+                                    │   └── Sales Genie space
+                                    ├── Marketing domain
+                                    │   ├── Marketing dashboards
+                                    │   └── Marketing models
+                                    └── Finance domain
+                                        └── Finance dashboards
+```
+
+### Scenario 2: Workspace Consolidation
+```
+WORKSPACE A          WORKSPACE B          CONSOLIDATED
+───────────          ───────────          ────────────
+Team 1 assets   ─┐                   ┌──► All assets
+                 ├──────────────────►│    preserved with
+Team 2 assets   ─┘                   └──► permissions
 ```
 
 ---
 
-## Quick start (two workspaces)
+## Included Toolkits
 
-**Prerequisites (short):**
+| Toolkit | Status | Description |
+|---------|--------|-------------|
+| [**dashboard-migration**](./dashboard-migration/) | ✅ Available | Lakeview (AI/BI) dashboards with permissions, schedules, subscriptions |
+| [**model-migration**](./model-migration/) | ✅ Available | MLflow models across Unity Catalog with version history and promotion |
+| [**genie-migration**](./genie-migration/) | ✅ Available | Genie spaces with benchmarks, permissions, and catalog mapping |
+| [**apps-migration**](./apps-migration/) | ✅ Available | Databricks Apps exported as bundles; catalog rewrite and redeploy |
 
-1. Databricks CLI v0.218+ with **two profiles** (source and target)
-2. Source and target catalogs on the **same UC metastore**
-3. Target **SQL warehouse** and target **tables** matching transformed references
-4. Admin or sufficient rights on both workspaces
+---
 
-**Volumes and files to create:**
+## Quick Start
 
-| What | When to create | How |
-|------|----------------|-----|
-| **Export volume** (source catalog) | Before running the Inventory job | `CREATE VOLUME IF NOT EXISTS <source_catalog>.<source_schema>.<export_volume>;` in the **source** workspace |
-| **Import volume** (target catalog) | **Automatic** — the Transfer & Deploy job creates it | No action needed; the Transfer notebook runs `CREATE VOLUME IF NOT EXISTS` |
-| **Mapping CSV** | Before running Export & Transform, if `transformation_enabled` is `"true"` | Create from the template (`catalog_schema_mapping_template.csv`), then upload: `databricks fs cp catalog_schema_mapping.csv dbfs:/Volumes/<source_catalog>/<source_schema>/<export_volume>/mappings/catalog_schema_mapping.csv --profile <source-profile>` |
+### Prerequisites
 
-See [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) for the full checklist with SQL and CLI commands.
+- **Databricks CLI** installed and configured
+- **Two workspaces** on the **same Unity Catalog metastore**
+- **Service principal** with access to **both** source and target workspaces (OAuth recommended)
+- **CLI profiles** for both source and target workspaces
+- Appropriate permissions on catalogs, schemas, and volumes in both workspaces
 
-### 1. Clone and configure locally
-
-```bash
-git clone https://github.com/YOUR_ORG/dashboard-migration.git
-cd dashboard-migration
-```
-
-Edit the `databricks.yml` in each bundle folder with your values. Each file has a clearly marked **EDIT HERE** section at the bottom — replace the placeholder values with your workspace URL, CLI profile, catalog, schema, volume, and warehouse details.
+### Basic Workflow
 
 ```bash
-# Edit these two files:
-source/databricks.yml   # Source workspace: host, profile, catalog, volume_base
-target/databricks.yml   # Target workspace: host, profile, catalogs, schemas, volumes, warehouse_id, target folder
+# 1. Fork or clone this repository
+git clone https://github.com/archana986/databricks-dashboard-migration.git
+cd databricks-dashboard-migration
+
+# 2. Choose a toolkit (each is a standalone Databricks Asset Bundle project)
+cd dashboard-migration    # Lakeview / AI-BI dashboards
+# or: cd model-migration
+# or: cd genie-migration
+# or: cd apps-migration
+
+# 3. Open that folder's SETUP.md and follow the steps
 ```
 
-See [SETUP.md](SETUP.md) for the full variable reference.
-
-### 2. Service principal in both workspaces (recommended)
-
-**Create or pick an SP:**
-
-1. Open **Account Console** → **User management** → **Service principals**.
-2. **Add service principal** (or reuse an existing one). Copy its **Application (client) ID** (a UUID).
-
-**Add the SP to both workspaces:**
-
-3. Account Console → **Workspaces** → select workspace → **Permissions** → **Add** → select the SP → grant at least **User** access.
-4. Repeat for both source and target workspaces.
-
-**Grant Unity Catalog privileges** (run as a catalog owner or metastore admin):
-
-```sql
--- Source catalog: read export volume
-GRANT USE CATALOG ON CATALOG <source_catalog> TO `<sp_application_id>`;
-GRANT USE SCHEMA  ON SCHEMA  <source_catalog>.<schema> TO `<sp_application_id>`;
-GRANT READ VOLUME ON VOLUME  <source_catalog>.<schema>.<export_volume> TO `<sp_application_id>`;
-
--- Target catalog: read + write import volume
-GRANT USE CATALOG  ON CATALOG <target_catalog> TO `<sp_application_id>`;
-GRANT USE SCHEMA   ON SCHEMA  <target_catalog>.<schema> TO `<sp_application_id>`;
-GRANT READ VOLUME, WRITE VOLUME ON VOLUME <target_catalog>.<schema>.<import_volume> TO `<sp_application_id>`;
-```
-
-**Grant warehouse and folder access:**
-
-| Resource | Permission | Why |
-|----------|-----------|-----|
-| Target SQL warehouse | **Can use** | Dashboard queries run on this warehouse |
-| Target workspace folder (`target_parent_path`) | **CAN MANAGE** | SP creates dashboards here |
-| Job notebook paths (synced by bundle) | **CAN VIEW** | SP must read notebooks to execute tasks |
-
-**Configure run-as in the target bundle** (so the job executes as the SP):
-
-Add `run_as` to the job in `target/resources/tgt_dashboard_jobs.yml`:
-
-```yaml
-resources:
-  jobs:
-    tgt_dashboard_register:
-      name: "[Tgt] Dashboard Transfer & Deploy"
-      run_as:
-        service_principal_name: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-```
-
-Redeploy after this change: `databricks bundle deploy --profile YOUR_TARGET_PROFILE`
-
-**OAuth client credentials (optional):** If any notebook needs to call another workspace directly (M2M), store client ID and secret in a secret scope — see [source/setup-guides/SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md). The default transfer + deploy path does **not** need this.
-
-### 3. Deploy and run (source)
+### Dashboard Migration Example
 
 ```bash
-cd source
-databricks bundle deploy --profile YOUR_SOURCE_PROFILE
-databricks bundle run src_dashboard_inventory --profile YOUR_SOURCE_PROFILE
+# In source workspace: discover and export
+databricks bundle deploy -t source
+databricks bundle run inventory_generation -t source
+# Review inventory in the UI, then:
+databricks bundle run export_and_transform -t source
+
+# In target workspace: import and deploy
+databricks bundle deploy -t target  
+databricks bundle run deploy_dashboards -t target
 ```
 
-Open **`Src_02_Review_and_Approve_Inventory.ipynb`** in the **source** workspace UI. Review the dashboard list, filter out any you don't want to migrate, and type **CONFIRM** when prompted. The notebook saves the approved list as `inventory_approved.csv` under `dashboard_inventory_approved/` in your export volume. The Export & Transform job reads this exact file.
+### Model Migration Example
 
 ```bash
-databricks bundle run src_dashboard_export_transform --profile YOUR_SOURCE_PROFILE
+# From source workspace
+databricks bundle deploy -t source
+databricks bundle run source_export_transfer_all -t source
+
+# From target workspace
+databricks bundle deploy -t target
+databricks bundle run target_migration -t target
 ```
 
-### 4. Deploy and run (target)
-
-The target bundle deploys to a **separate workspace**. Before deploying, ensure the following are in place on the **target** workspace:
-
-| Requirement | Details |
-|-------------|---------|
-| **CLI profile** | A separate profile in `~/.databrickscfg` pointing to the target workspace host |
-| **Target catalog + schema** | Must exist and be accessible; must be on the **same UC metastore** as the source catalog |
-| **Target tables** | Tables referenced by transformed dashboards must already exist in the target catalog |
-| **SQL warehouse** | A warehouse the deploying user (or SP) can use; its ID goes in `warehouse_id` |
-| **Target folder** | A workspace folder (e.g. `/Shared/Migrated_Dashboards`) where dashboards will be created; the user or SP must have `CAN_MANAGE` on it |
-| **UC permissions** | The deploying user or SP needs `USE CATALOG`, `USE SCHEMA` on the target catalog/schema, and `READ VOLUME`/`WRITE VOLUME` on the import volume (if pre-created) |
+### Genie Space Migration Example
 
 ```bash
+cd genie-migration/source
+cp databricks.local.yml.example databricks.local.yml   # edit profile, host, catalog, volume
+databricks bundle deploy -p <source-profile>
+databricks bundle run src_genie_inventory -p <source-profile>
+# Approve in Src_02 notebook, then:
+databricks bundle run src_genie_export -p <source-profile>
+
 cd ../target
-databricks bundle deploy --profile YOUR_TARGET_PROFILE
-databricks bundle run tgt_dashboard_register --profile YOUR_TARGET_PROFILE
+cp databricks.local.yml.example databricks.local.yml   # edit target host, catalogs, warehouse_id
+databricks bundle deploy -p <target-profile>
+databricks bundle run tgt_genie_deploy -p <target-profile>
 ```
 
-The target job runs **transfer** (copy artifacts from the source export volume into the target import volume — both visible via the shared metastore) then **deploy** (create dashboards under `target_parent_path` and apply permissions/schedules when enabled).
+See [genie-migration/README.md](./genie-migration/README.md) and [genie-migration/SETUP.md](./genie-migration/SETUP.md).
 
----
+### Databricks Apps Migration Example
 
-## Jobs reference
-
-| Bundle | Job name | CLI key | What it does |
-|--------|----------|---------|--------------|
-| Source | `[Src] Dashboard Inventory` | `src_dashboard_inventory` | Scans source dashboards and generates inventory CSV |
-| Source | `[Src] Dashboard Export & Transform` | `src_dashboard_export_transform` | Exports and transforms approved dashboards |
-| Target | `[Tgt] Dashboard Transfer & Deploy` | `tgt_dashboard_register` | Copies volume data and creates dashboards in target |
-
-Between **Inventory** and **Export & Transform**, review and approve in **`Src_02_Review_and_Approve_Inventory.ipynb`** (manual, no scheduled job).
-
----
-
-## Repository layout
-
-Each bundle is **completely self-contained** with its own notebooks and helpers. No symlinks, no shared directories, no cross-dependencies.
-
-```
-dashboard-migration/
-├── source/                          # Source bundle (deploy to source workspace)
-│   ├── databricks.yml               #   EDIT HERE: source host, profile, catalog, volume
-│   ├── resources/
-│   │   └── src_dashboard_jobs.yml   #   Job definitions: Inventory + Export & Transform
-│   ├── notebooks/
-│   │   ├── Src_01_Inventory_Generation.ipynb
-│   │   ├── Src_02_Review_and_Approve_Inventory.ipynb
-│   │   └── Src_03_Export_and_Transform.ipynb
-│   ├── helpers/                     #   Python modules (discovery, export, transform, etc.)
-│   └── setup-guides/                #   SP OAuth setup doc + secrets notebook
-│
-├── target/                          # Target bundle (deploy to target workspace)
-│   ├── databricks.yml               #   EDIT HERE: target host, profile, catalogs, warehouse
-│   ├── resources/
-│   │   └── tgt_dashboard_jobs.yml   #   Job definition: Transfer & Deploy
-│   ├── notebooks/
-│   │   ├── Tgt_01_Transfer_Volume.ipynb
-│   │   └── Tgt_02_Deploy_Dashboards.ipynb
-│   └── helpers/                     #   Python modules (deployment_package, sdk_deployer)
-│
-├── catalog_schema_mapping_template.csv   # Template for catalog/schema remapping
-├── SETUP.md                         # Detailed setup and variable reference
-├── PREREQUISITES_CHECKLIST.md       # Pre-flight checklist with SQL and CLI
-└── WHY_THIS_TOOLKIT.md              # Comparison with Terraform
+```bash
+cd apps-migration/source
+cp databricks.local.yml.example databricks.local.yml   # edit profile, host, catalog, volume, target_host
+databricks bundle deploy -p <profile>
+databricks bundle run src_apps_inventory -p <profile>
+databricks bundle run src_apps_export -p <profile>
+# Download a bundle from the volume, run transform_catalogs.py if needed, then deploy from the app folder.
 ```
 
-**Why two bundles?** Each bundle targets a different workspace (`workspace.host`). You run `databricks bundle deploy` from `source/` against the source workspace, and from `target/` against the target workspace. They never cross-reference each other at deploy time.
-
-**Why separate code in each bundle?** The source bundle only needs inventory, export, and transform logic. The target bundle only needs transfer and deployment logic. Keeping them independent means you can hand off just the `target/` folder to a target workspace team without dragging in source-specific code.
+See [apps-migration/README.md](./apps-migration/README.md) and [apps-migration/SETUP.md](./apps-migration/SETUP.md).
 
 ---
 
-## FAQ
+## The Transformation Layer
 
-**Why two bundles instead of one?**  
-Source and target are **different workspaces**. Each bundle sets `workspace.host` for where notebooks run and contains only the notebooks and helpers it needs. That keeps auth simple and means each bundle is fully independent -- no symlinks, no shared directories.
+A key feature is **catalog/schema remapping** via CSV:
 
-**Why must source and target share a metastore?**  
-The **transfer** step copies files between UC volume locations. Both catalogs must be visible to the **target** workspace’s compute for that copy to succeed. If your metastores differ, use **Delta Sharing**, **volume replication**, or another approved copy path—then adjust your process (not covered in the default notebooks).
+```csv
+source_catalog,source_schema,target_catalog,target_schema
+dev_analytics,bronze,prod_analytics,bronze
+dev_analytics,silver,prod_analytics,silver  
+dev_analytics,gold,prod_analytics,gold
+old_catalog,reporting,new_catalog,reporting
+```
 
-**Where do files live?**  
-Under the **export** volume path you set in the source bundle (subfolders such as `dashboard_inventory`, `exported`, `transformed`, etc.), then under the **import** volume after transfer.
-
-**What is Step 2 for?**  
-You narrow the dashboard list and **approve** what should be exported so large workspaces are not migrated by accident.
-
-**Do I need a mapping CSV?**  
-Only if **`transformation_enabled`** is `true` and you rely on catalog/schema/table rewrites. If transformation is off, you do not need the mapping file for that path (confirm your parameter defaults in the source bundle).
-
-**Which profile do I use where?**  
-Always use **`YOUR_SOURCE_PROFILE`** when running `databricks bundle` from **`source/`**, and **`YOUR_TARGET_PROFILE`** from **`target/`**, so the CLI talks to the correct host.
-
-**Does the SP replace my user for everything?**  
-No. You still deploy bundles and can run jobs as yourself. If you set **run as** on the target job to the SP, **only that job’s** notebook execution uses the SP for `WorkspaceClient()` and volume access **as configured**.
-
-**What does the SP need on the target warehouse?**  
-Ability to **run queries** on the warehouse you pass as `warehouse_id` / `warehouse_name` (e.g. “Can use” on the warehouse).
-
-**Can I migrate without an SP?**  
-Yes. Use your user identity for jobs and ensure **you** have UC and workspace permissions. SP is recommended for **automation and auditing**.
-
-**What if transfer says there is no source data?**  
-Confirm Step 3 finished successfully and paths match: **export volume** name in the source bundle equals the **`export_volume`** parameter expected by the target job’s transfer task (and catalogs/schemas are correct).
-
-**What if dashboards show broken data?**  
-Tables in the **target** catalog must exist and match **transformed** names. Validate mapping rules and run a few dashboards manually before a full cutover.
-
-**Are schedules and permissions always applied?**  
-They run when **`apply_permissions`** and **`apply_schedules`** are true in the target bundle and the SP or user has sufficient rights. Failures there may still leave dashboards created—check job logs.
-
-**Is this idempotent?**  
-Re-running may recreate or update objects depending on notebook logic and duplicate checks (`skip_duplicate_check`). Treat the first successful run as your template; read logs before repeating on production.
-
-**Where do I get Lakeview / bundle help?**  
-Use [Databricks documentation for Lakeview dashboards](https://docs.databricks.com/dashboards/index.html) and [Databricks Asset Bundles](https://docs.databricks.com/dev-tools/bundles/index.html).
-
-**Can I test from one machine without committing secrets?**  
-Yes. Auth is handled by your CLI profile (OAuth or Azure CLI) — no tokens are stored in `databricks.yml`. Edit the `host` and `profile` fields and run `databricks auth login` to authenticate.
+This file drives automatic transformation of all references in dashboards, queries, and configurations. No manual JSON editing required.
 
 ---
 
-## More documentation
+## Security & Compliance
 
-| Document | Use |
-|----------|-----|
-| [SETUP.md](SETUP.md) | Full setup, secrets, troubleshooting |
-| [PREREQUISITES_CHECKLIST.md](PREREQUISITES_CHECKLIST.md) | Pre-flight checklist |
-| [WHY_THIS_TOOLKIT.md](WHY_THIS_TOOLKIT.md) | vs Terraform and decision guide |
-| [source/setup-guides/SP_OAUTH_SETUP.md](source/setup-guides/SP_OAUTH_SETUP.md) | OAuth M2M and secret scope |
+- **Service Principal OAuth** — A single service principal with access to both workspaces handles authentication securely. No PATs or secrets stored in notebooks.
+- **Cross-Workspace Access** — The service principal must be granted appropriate permissions in both source and target workspaces (workspace admin or specific resource permissions).
+- **Unity Catalog Volumes** — All artifact and metadata transfer goes through governed, audited UC paths on the shared metastore.
+- **Permission Preservation** — ACLs are captured and reapplied, so nothing is left open.
+- **Approval Workflow** — Inventory review before any migration executes.
 
+---
+
+## Comparison: Manual vs Toolkit
+
+| Task | Manual Approach | With Toolkits |
+|------|-----------------|---------------|
+| Migrate 50 dashboards | ~2 hours each = **100 hours** | **~30 minutes total** |
+| Update catalog references | Search/replace, pray for consistency | **Automated, verified** |
+| Preserve permissions | Export ACLs separately, map users | **Automatic** |
+| Preserve schedules | Not possible via UI export | **Automatic** |
+| Audit trail | None | **Full lineage in UC** |
+| Rollback capability | Manual restore from... somewhere | **Re-run from volume** |
+
+---
+
+## Roadmap
+
+| Phase | Toolkits | Status |
+|-------|----------|--------|
+| Phase 1 | Dashboard Migration, Model Migration | ✅ Complete |
+| Phase 2 | Genie Space Migration | ✅ Complete |
+| Phase 3 | Databricks Apps Migration | ✅ Complete |
+| Phase 4 | Unified Migration Hub (all assets) | 📋 Planned |
+
+---
+
+## Contributing
+
+Contributions and forks are welcome. Each toolkit is a standalone Databricks Asset Bundle. To extend or add a migration type:
+
+1. Follow the pattern used in existing folders: `source/` and `target/` bundles (where applicable), plus `README.md` and `SETUP.md`.
+2. Use Unity Catalog volumes for artifact transfer between workspaces on a shared metastore.
+3. Prefer placeholders and `databricks.local.yml.example` over hard-coded workspace or catalog names.
+4. Open a pull request with a short description of what you tested.
+
+---
+
+## Support
+
+1. Read the toolkit’s `README.md` and `SETUP.md` (dashboard migration also has `WHY_THIS_TOOLKIT.md` for scope).
+2. Search [existing issues](https://github.com/archana986/databricks-dashboard-migration/issues).
+3. Open a new issue with your Databricks runtime/CLI version and the toolkit folder you are using.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
+
+Databricks, Unity Catalog, Genie, Lakeview, and related names are trademarks of their respective owners. This repository is a community sample and is not affiliated with or endorsed by Databricks.
+
+---
+
+<p align="center">
+  <b>Built for teams who need to move analytics assets when organizations change.</b>
+</p>

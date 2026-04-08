@@ -1,0 +1,39 @@
+# Target bundle — deploy to target workspace.
+# Cleans target volume and models, transfers from source, imports, validates, reconciles.
+#
+# Deploy: databricks bundle deploy -p <your-profile>
+# Run:    databricks bundle run tgt_model_migration_cleanup -p <your-profile>
+#         databricks bundle run tgt_model_migration_register -p <your-profile>
+
+bundle:
+  name: uc-model-migration-tgt
+
+include:
+  - resources/*.yml
+
+variables:
+  source_catalog:
+    description: "Source UC catalog name"
+    default: "<source_catalog>"
+  target_catalog:
+    description: "Target UC catalog name"
+    default: "<target_catalog>"
+  schema:
+    description: "Schema name"
+    default: "<schema>"
+  model_names:
+    description: "Comma-separated model short names to migrate"
+    default: "<model1,model2,model3>"
+  export_volume:
+    description: "Export volume name in source catalog"
+    default: "model_exports"
+  import_volume:
+    description: "Import volume name in target catalog"
+    default: "model_imports"
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: <your-target-profile>
+      host: <your-target-workspace-url>

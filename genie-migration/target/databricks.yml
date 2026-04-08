@@ -1,0 +1,75 @@
+# Target bundle — deploy to the TARGET workspace.
+# Transfers export artifacts, transforms catalog references, deploys Genie Spaces, applies ACLs, reconciles.
+#
+# Setup:
+#   1. databricks auth login -p <your-profile> --host <your-target-workspace-url>
+#   2. Copy databricks.local.yml.example to databricks.local.yml and set host, profile, catalogs, warehouse_id, paths.
+#   3. cd target && databricks bundle deploy -p <your-profile>
+#   4. databricks bundle run tgt_genie_deploy -p <your-profile>
+
+bundle:
+  name: genie-migration-target
+
+include:
+  - resources/*.yml
+  - databricks.local.yml
+
+sync:
+  paths:
+    - notebooks
+    - helpers
+
+variables:
+  source_catalog:
+    description: Source catalog (export volume)
+    default: YOUR_SOURCE_CATALOG
+  source_schema:
+    description: Source schema
+    default: genie_migration
+  export_volume:
+    description: Export volume name
+    default: genie_migration
+  source_volume_path:
+    description: Full source volume path
+    default: /Volumes/${var.source_catalog}/${var.source_schema}/${var.export_volume}
+  target_catalog:
+    description: Target catalog (import volume)
+    default: YOUR_TARGET_CATALOG
+  target_schema:
+    description: Target schema
+    default: genie_migration
+  import_volume:
+    description: Import volume name
+    default: genie_migration
+  volume_path:
+    description: Full target volume path
+    default: /Volumes/${var.target_catalog}/${var.target_schema}/${var.import_volume}
+  warehouse_id:
+    description: Target SQL warehouse ID (SQL Warehouses UI)
+    default: YOUR_SQL_WAREHOUSE_ID
+  target_parent_path:
+    description: Workspace folder for migrated Genie Spaces
+    default: /Workspace/Shared/Genie
+  apply_permissions:
+    description: Apply permissions after deploy (true/false)
+    default: "true"
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  EDIT HERE — or use databricks.local.yml                                      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+targets:
+  default:
+    default: true
+    workspace:
+      profile: target-profile
+      host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      source_catalog: YOUR_SOURCE_CATALOG
+      source_schema: genie_migration
+      export_volume: genie_migration
+      target_catalog: YOUR_TARGET_CATALOG
+      target_schema: genie_migration
+      import_volume: genie_migration
+      warehouse_id: YOUR_SQL_WAREHOUSE_ID
+      target_parent_path: /Workspace/Shared/Genie

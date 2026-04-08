@@ -1,0 +1,16 @@
+resources:
+  jobs:
+    setup_sample_genie_spaces:
+      name: "[Setup] Create Sample Genie Spaces"
+      description: "Create sample data tables and Genie Spaces for migration testing"
+      tasks:
+        - task_key: create_data_and_spaces
+          notebook_task:
+            notebook_path: ../notebooks/Setup_Create_Sample_Genie_Spaces.ipynb
+            base_parameters:
+              catalog: ${var.source_catalog}
+              schema: ${var.schema}
+      max_concurrent_runs: 1
+      tags:
+        project: genie-migration
+        phase: setup

@@ -1,0 +1,11 @@
+# Copy to databricks.local.yml (gitignored) for optional demo/setup bundle.
+targets:
+  default:
+    workspace:
+      profile: your-cli-profile
+      host: https://YOUR-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      source_catalog: your_catalog
+      target_catalog: your_target_catalog
+      schema: genie_demo

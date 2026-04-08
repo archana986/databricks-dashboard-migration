@@ -1,0 +1,30 @@
+resources:
+  jobs:
+    src_genie_inventory:
+      name: "[Src] Genie Space Inventory"
+      description: "Discover all Genie Spaces and generate inventory for review"
+      tasks:
+        - task_key: inventory
+          notebook_task:
+            notebook_path: ../notebooks/Src_01_Inventory_Generation.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+              parent_path_filter: ${var.parent_path_filter}
+      max_concurrent_runs: 1
+      tags:
+        project: genie-migration
+        phase: inventory
+
+    src_genie_export:
+      name: "[Src] Genie Space Export"
+      description: "Export approved Genie Spaces with benchmarks and permissions"
+      tasks:
+        - task_key: export
+          notebook_task:
+            notebook_path: ../notebooks/Src_03_Export_Genie_Spaces.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+      max_concurrent_runs: 1
+      tags:
+        project: genie-migration
+        phase: export

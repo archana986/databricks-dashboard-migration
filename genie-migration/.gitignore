@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Databricks bundle state (never commit)
+.databricks/
+*.tfstate
+*.tfstate.backup
+.terraform/
+
+# IDE / OS
+.idea/
+.vscode/
+.cursor/
+*.swp
+.DS_Store
+
+# Secrets
+*.pem
+*.key
+secrets.json
+credentials.json
+
+# Generated / scratch
+test_output/
+*.log
+transcripts/
+
+# Local research / exports (keep out of customer repos)
+*.pdf
+
+# Internal planning (optional)
+PLAN.md
+
+# If you put workspace secrets in databricks.local.yml, use a private fork or skip-worktree;
+# the committed databricks.local.yml in this repo is an empty stub for bundle validate.

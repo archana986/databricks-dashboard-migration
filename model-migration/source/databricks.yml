@@ -1,0 +1,36 @@
+# Source bundle — deploy to source workspace.
+# Cleans export volume and exports models. Never touches source registered models.
+#
+# Deploy: databricks bundle deploy -p <your-profile>
+# Run:    databricks bundle run src_model_migration_cleanup -p <your-profile>
+#         databricks bundle run src_model_export -p <your-profile>
+
+bundle:
+  name: uc-model-migration-src
+
+include:
+  - resources/*.yml
+
+variables:
+  source_catalog:
+    description: "Source UC catalog name"
+    default: "<source_catalog>"
+  target_catalog:
+    description: "Target UC catalog name (used in export manifest)"
+    default: "<target_catalog>"
+  schema:
+    description: "Schema name"
+    default: "<schema>"
+  model_names:
+    description: "Comma-separated model short names to migrate"
+    default: "<model1,model2,model3>"
+  export_volume:
+    description: "Export volume name in source catalog"
+    default: "model_exports"
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: <your-source-profile>
+      host: <your-source-workspace-url>

@@ -1,0 +1,2 @@
+old_catalog,old_schema,old_table,new_catalog,new_schema,new_table,old_volume,new_volume
+source_catalog,source_schema,,target_catalog,target_schema,,,

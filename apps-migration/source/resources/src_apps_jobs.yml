@@ -1,0 +1,80 @@
+resources:
+  jobs:
+    prereq_setup_target_catalog:
+      name: "[Prereq] Setup Target Catalog"
+      description: "Create schema, volume, and copy tables from source to target catalog"
+      tasks:
+        - task_key: setup_target
+          notebook_task:
+            notebook_path: ../notebooks/Prereq_Setup_Target_Catalog.ipynb
+            base_parameters:
+              source_catalog: ${var.catalog}
+              target_catalog: ${var.target_catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+
+    src_apps_inventory:
+      name: "[Src] Apps Inventory"
+      description: "Discover all Databricks Apps in source workspace and generate inventory"
+      tasks:
+        - task_key: generate_inventory
+          notebook_task:
+            notebook_path: ../notebooks/Src_01_Inventory_Generation.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+          environment_key: default
+        - task_key: create_approved
+          depends_on:
+            - task_key: generate_inventory
+          notebook_task:
+            notebook_path: ../notebooks/Src_02_Create_Approved.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+
+    src_apps_export:
+      name: "[Src] Apps Export"
+      description: "Export approved apps as DAB bundles"
+      tasks:
+        - task_key: export_apps
+          notebook_task:
+            notebook_path: ../notebooks/Src_03_Export_Apps.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+              volume: ${var.volume}
+              target_host: ${var.target_host}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+
+    setup_deploy_sample_apps:
+      name: "[Setup] Deploy Sample Apps"
+      description: "Deploy source code to existing sample apps for testing"
+      tasks:
+        - task_key: deploy_apps
+          notebook_task:
+            notebook_path: ../notebooks/Setup_Deploy_Sample_Apps.ipynb
+            base_parameters:
+              catalog: ${var.catalog}
+              schema: ${var.schema}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"

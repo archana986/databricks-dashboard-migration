@@ -1,0 +1,57 @@
+resources:
+  jobs:
+    tgt_genie_deploy:
+      name: "[Tgt] Genie Space Deploy"
+      description: "Transfer, transform catalogs, deploy, apply permissions, and reconcile Genie Spaces"
+      tasks:
+        - task_key: transfer
+          notebook_task:
+            notebook_path: ../notebooks/Tgt_01_Transfer_Volume.ipynb
+            base_parameters:
+              source_volume_path: ${var.source_volume_path}
+              target_volume_path: ${var.volume_path}
+              target_catalog: ${var.target_catalog}
+              target_schema: ${var.target_schema}
+              import_volume: ${var.import_volume}
+
+        - task_key: transform_catalogs
+          depends_on:
+            - task_key: transfer
+          notebook_task:
+            notebook_path: ../notebooks/Tgt_00_Transform_Catalogs.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+              source_catalog: ${var.source_catalog}
+              target_catalog: ${var.target_catalog}
+
+        - task_key: deploy
+          depends_on:
+            - task_key: transform_catalogs
+          notebook_task:
+            notebook_path: ../notebooks/Tgt_02_Deploy_Genie_Spaces.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+              warehouse_id: ${var.warehouse_id}
+              target_parent_path: ${var.target_parent_path}
+
+        - task_key: permissions
+          depends_on:
+            - task_key: deploy
+          notebook_task:
+            notebook_path: ../notebooks/Tgt_03_Apply_Permissions.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+              apply_permissions: ${var.apply_permissions}
+
+        - task_key: reconciliation
+          depends_on:
+            - task_key: permissions
+          notebook_task:
+            notebook_path: ../notebooks/Tgt_04_Reconciliation.ipynb
+            base_parameters:
+              volume_path: ${var.volume_path}
+
+      max_concurrent_runs: 1
+      tags:
+        project: genie-migration
+        phase: deploy

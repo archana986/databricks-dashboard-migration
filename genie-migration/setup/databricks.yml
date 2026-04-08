@@ -1,0 +1,37 @@
+# Optional setup bundle — sample Genie Spaces and data for testing the migration flow.
+#
+# Deploy to the workspace where you want demo spaces created (often the source workspace).
+
+bundle:
+  name: genie-migration-setup
+
+include:
+  - resources/*.yml
+  - databricks.local.yml
+
+sync:
+  paths:
+    - notebooks
+
+variables:
+  source_catalog:
+    description: Catalog for sample tables and spaces
+    default: YOUR_CATALOG
+  target_catalog:
+    description: Optional second catalog name (documentation only for demos)
+    default: YOUR_TARGET_CATALOG
+  schema:
+    description: Schema for sample data
+    default: genie_demo
+
+targets:
+  default:
+    default: true
+    workspace:
+      profile: source-profile
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      source_catalog: YOUR_CATALOG
+      target_catalog: YOUR_TARGET_CATALOG
+      schema: genie_demo

@@ -1,0 +1,12 @@
+# Copy to databricks.local.yml (gitignored) and fill in your values.
+# databricks bundle commands resolve includes in order; this file overrides placeholders in databricks.yml.
+targets:
+  default:
+    workspace:
+      profile: your-source-cli-profile
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: your_export_catalog
+      schema: your_schema
+      volume: your_volume_name

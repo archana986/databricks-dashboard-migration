@@ -1,0 +1,16 @@
+# Copy to databricks.local.yml (gitignored) and fill in your values.
+targets:
+  default:
+    workspace:
+      profile: your-target-cli-profile
+      host: https://YOUR-TARGET-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      source_catalog: your_source_catalog
+      source_schema: your_source_schema
+      export_volume: your_export_volume
+      target_catalog: your_target_catalog
+      target_schema: your_target_schema
+      import_volume: your_import_volume
+      warehouse_id: "your-sql-warehouse-id"
+      target_parent_path: /Workspace/Shared/Genie

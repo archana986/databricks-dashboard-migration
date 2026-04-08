@@ -1,0 +1,54 @@
+# Source bundle — deploy to the SOURCE workspace.
+# Discovers Genie Spaces, lets you approve inventory, then exports configs to a UC volume.
+#
+# Setup:
+#   1. databricks auth login -p <your-profile> --host <your-source-workspace-url>
+#   2. Copy databricks.local.yml.example to databricks.local.yml and set host, profile, catalog, schema, volume
+#      (or edit targets below directly).
+#   3. cd source && databricks bundle deploy -p <your-profile>
+#   4. databricks bundle run src_genie_inventory -p <your-profile>
+#   5. Review in Src_02 notebook, then: databricks bundle run src_genie_export -p <your-profile>
+
+bundle:
+  name: genie-migration-source
+
+include:
+  - resources/*.yml
+  - databricks.local.yml
+
+sync:
+  paths:
+    - notebooks
+    - helpers
+
+variables:
+  catalog:
+    description: Unity Catalog catalog for export artifacts
+    default: YOUR_SOURCE_CATALOG
+  schema:
+    description: Schema name
+    default: genie_migration
+  volume:
+    description: Volume name for exports
+    default: genie_migration
+  volume_path:
+    description: Full UC volume path for exports
+    default: /Volumes/${var.catalog}/${var.schema}/${var.volume}
+  parent_path_filter:
+    description: Only list spaces under this workspace path prefix
+    default: /Workspace
+
+# ╔══════════════════════════════════════════════════════════════════════════════╗
+# ║  EDIT HERE — or use databricks.local.yml (recommended for secrets/hosts)      ║
+# ╚══════════════════════════════════════════════════════════════════════════════╝
+targets:
+  default:
+    default: true
+    workspace:
+      profile: source-profile
+      host: https://YOUR-SOURCE-WORKSPACE.cloud.databricks.com
+      root_path: /Workspace/Shared/.bundle/${bundle.name}/${bundle.target}
+    variables:
+      catalog: YOUR_SOURCE_CATALOG
+      schema: genie_migration
+      volume: genie_migration
