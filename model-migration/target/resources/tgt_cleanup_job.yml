@@ -14,7 +14,7 @@ resources:
             notebook_path: ../src/notebooks/07_cleanup_target_volume.ipynb
             base_parameters:
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              target_schema: "${var.target_schema}"
               import_volume: "${var.import_volume}"
           environment_key: migration_env
 
@@ -25,8 +25,9 @@ resources:
             notebook_path: ../src/notebooks/08_cleanup_target_models.ipynb
             base_parameters:
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              target_schema: "${var.target_schema}"
               model_names: "${var.model_names}"
+              experiment_prefix: "${var.experiment_prefix}"
           environment_key: migration_env
 
       environments:

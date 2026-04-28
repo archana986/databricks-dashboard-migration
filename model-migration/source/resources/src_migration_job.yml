@@ -16,7 +16,8 @@ resources:
             base_parameters:
               source_catalog: "${var.source_catalog}"
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              source_schema: "${var.source_schema}"
+              target_schema: "${var.target_schema}"
               volume_name: "${var.export_volume}"
               model_names: "${var.model_names}"
           environment_key: migration_env

@@ -15,7 +15,8 @@ resources:
             base_parameters:
               source_catalog: "${var.source_catalog}"
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              source_schema: "${var.source_schema}"
+              target_schema: "${var.target_schema}"
               export_volume: "${var.export_volume}"
               import_volume: "${var.import_volume}"
           environment_key: migration_env
@@ -28,9 +29,11 @@ resources:
             base_parameters:
               source_catalog: "${var.source_catalog}"
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              source_schema: "${var.source_schema}"
+              target_schema: "${var.target_schema}"
               import_volume: "${var.import_volume}"
               volume_catalog: "${var.target_catalog}"
+              experiment_prefix: "${var.experiment_prefix}"
           environment_key: migration_env
 
         - task_key: validate
@@ -41,7 +44,8 @@ resources:
             base_parameters:
               source_catalog: "${var.source_catalog}"
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              source_schema: "${var.source_schema}"
+              target_schema: "${var.target_schema}"
               import_volume: "${var.import_volume}"
               volume_catalog: "${var.target_catalog}"
           environment_key: migration_env
@@ -54,7 +58,8 @@ resources:
             base_parameters:
               source_catalog: "${var.source_catalog}"
               target_catalog: "${var.target_catalog}"
-              schema: "${var.schema}"
+              source_schema: "${var.source_schema}"
+              target_schema: "${var.target_schema}"
               import_volume: "${var.import_volume}"
               volume_catalog: "${var.target_catalog}"
               model_names: "${var.model_names}"
